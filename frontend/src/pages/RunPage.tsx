@@ -20,6 +20,7 @@ import type { Finding } from "@/lib/types";
 export function RunPage() {
   const { id = "" } = useParams<{ id: string }>();
   const qc = useQueryClient();
+  const [activeTab, setActiveTab] = useState<string>("findings");
 
   const run = useQuery({
     queryKey: ["run", id],
@@ -139,31 +140,31 @@ export function RunPage() {
 
         <Tabs defaultValue={hasMultiDoc ? "docs" : "findings"}>
           <TabsList>
-            <TabsTrigger>Findings ({totalFindings})</TabsTrigger>
-            <TabsTrigger>Consensus</TabsTrigger>
-            {hasMultiDoc ? <TabsTrigger>Documents</TabsTrigger> : <TabsTrigger>Spec</TabsTrigger>}
-            <TabsTrigger>Changes</TabsTrigger>
-            <TabsTrigger>Log</TabsTrigger>
+            <TabsTrigger active={activeTab === "findings"} onClick={() => setActiveTab("findings")}>Findings ({totalFindings})</TabsTrigger>
+            <TabsTrigger active={activeTab === "consensus"} onClick={() => setActiveTab("consensus")}>Consensus</TabsTrigger>
+            {hasMultiDoc ? <TabsTrigger active={activeTab === "docs"} onClick={() => setActiveTab("docs")}>Documents</TabsTrigger> : <TabsTrigger active={activeTab === "spec"} onClick={() => setActiveTab("spec")}>Spec</TabsTrigger>}
+            <TabsTrigger active={activeTab === "changes"} onClick={() => setActiveTab("changes")}>Changes</TabsTrigger>
+            <TabsTrigger active={activeTab === "log"} onClick={() => setActiveTab("log")}>Log</TabsTrigger>
           </TabsList>
 
           <TabsContent>
-            {findings.isLoading ? (
+            {activeTab === "findings" && (findings.isLoading ? (
               <Skeleton className="h-64" />
             ) : f ? (
               <FindingsPanel findings={f} />
-            ) : null}
+            ) : null)}
           </TabsContent>
 
           <TabsContent>
-            {consensus.isLoading ? (
+            {activeTab === "consensus" && (consensus.isLoading ? (
               <Skeleton className="h-40" />
             ) : c ? (
               <ConsensusDetail consensus={c} />
-            ) : null}
+            ) : null)}
           </TabsContent>
 
           <TabsContent>
-            {hasMultiDoc ? (
+            {activeTab === (hasMultiDoc ? "docs" : "spec") && (hasMultiDoc ? (
               updatedDocs.isLoading ? (
                 <Skeleton className="h-96" />
               ) : updatedDocs.data ? (
@@ -177,19 +178,19 @@ export function RunPage() {
               ) : (
                 <EmptyState text="Writer не сгенерировал обновлённую спецификацию" />
               )
-            )}
+            ))}
           </TabsContent>
 
           <TabsContent>
-            {changes.isLoading ? (
+            {activeTab === "changes" && (changes.isLoading ? (
               <Skeleton className="h-40" />
             ) : changes.data ? (
               <ChangesPanel changes={changes.data} />
-            ) : null}
+            ) : null)}
           </TabsContent>
 
           <TabsContent>
-            <RoundLogPanel entries={d.round_log || []} />
+            {activeTab === "log" && <RoundLogPanel entries={d.round_log || []} />}
           </TabsContent>
         </Tabs>
       </main>
