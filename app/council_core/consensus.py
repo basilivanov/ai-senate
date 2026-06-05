@@ -86,8 +86,8 @@ def calculate_consensus(run_id: str, agent_runs: Dict[str, Dict[str, Any]]) -> C
     # Calculate deterministic status based on mathematical rules from config/consensus.yaml
     import os
     import yaml
-    
-    config_path = "/opt/ai-lab/ai-senate/app/config/consensus.yaml"
+
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "app", "config", "consensus.yaml")
     config = {}
     if os.path.exists(config_path):
         try:

@@ -1,53 +1,68 @@
 defaults:
-  timeout_sec: 120
-  max_retries: 1
+  provider: "cliproxy"
+  opencode_agent: "plan"
+  timeout_sec: 180
   effort: "max"
   temperature: 0.2
   require_json_output: true
   save_raw_output: true
   save_prompt: true
 
-agents:
-  codex:
+# Perspectives: each one is a single reviewer with a focused role.
+# The "name" maps to a .md file in .opencode/agents/<name>.md which is loaded
+# as the system prompt for the opencode "plan" subagent.
+perspectives:
+  architect:
     enabled: true
-    type: cli
-    provider: codex
-    role: implementation_reviewer
-    command:
-      binary: "codexa"
-      args: ["--xhigh"]
-    working_dir: "/opt/ai-lab/ai-senate"
-    timeout_sec: 120
+    role: "Architect — границы, контракты, эволюция системы"
+    model: "claude-sonnet-4-6"
+    timeout_sec: 240
 
-  agy:
+  dba:
     enabled: true
-    type: api
-    provider: openai_compatible
-    role: critical_reviewer
-    base_url: "http://127.0.0.1:18317/v1"
-    api_key_env: "AGY_PROXY_API_KEY"
-    model: "gemini-3.1-pro-preview"
-    temperature: 0.2
-    timeout_sec: 120
+    role: "DBA — модель данных, схема, миграции, перформанс"
+    model: "claude-sonnet-4-6"
+    timeout_sec: 240
 
-  opus:
+  coder:
     enabled: true
-    type: cli
-    provider: agya
-    role: architectural_reviewer
-    command:
-      binary: "agya"
-      args: ["exec", "--model", "claude-opus-4-6-thinking"]
-    working_dir: "/opt/ai-lab/ai-senate"
-    timeout_sec: 180
+    role: "Разработчик — реализуемость, алгоритмы, читаемость, тесты"
+    model: "claude-sonnet-4-6"
+    timeout_sec: 240
 
-  writer:
+  security:
     enabled: true
-    type: api
-    provider: openai_compatible
-    role: synthesizer
-    base_url: "http://127.0.0.1:18317/v1"
-    api_key_env: "AGY_PROXY_API_KEY"
-    model: "gemini-3.1-pro-preview"
-    temperature: 0.2
-    timeout_sec: 180
+    role: "Security — модель угроз, аутентификация, защита данных, compliance"
+    model: "claude-sonnet-4-6"
+    timeout_sec: 240
+
+  critical:
+    enabled: true
+    role: "Критик — противоречия, двусмысленности, скрытые допущения, edge cases"
+    model: "claude-sonnet-4-6"
+    timeout_sec: 240
+
+  synthesizer:
+    enabled: true
+    role: "Синтезатор — объединение выводов Совета, приоритезация, план"
+    model: "claude-opus-4-6-thinking"
+    timeout_sec: 300
+
+# Special: the writer agent rewrites the spec, not reviews it.
+writer:
+  enabled: true
+  role: "Writer — обновление спецификации по выводам Совета"
+  model: "claude-opus-4-6-thinking"
+  timeout_sec: 600
+
+# Juries: named groupings of perspectives used by the orchestrator.
+# The default jury is used for round 1, 2, 3 (independent review / cross-review / final check).
+juries:
+  default:
+    - architect
+    - dba
+    - coder
+    - security
+    - critical
+  synthesis:
+    - synthesizer

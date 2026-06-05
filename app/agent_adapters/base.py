@@ -1,37 +1,51 @@
-import re
 import json
-from typing import Dict, Any, Optional
+import re
+from typing import Any, Dict, Optional
 
-class BaseAgentAdapter:
-    def __init__(self, name: str, config: Dict[str, Any]):
-        self.name = name
-        self.config = config
 
-    async def run(self, request_contract_json: str) -> Dict[str, Any]:
-        """Runs the agent and returns standard execution result dict."""
-        raise NotImplementedError()
+_FENCE_RE = re.compile(r"^```(?:json|JSON)?\s*|\s*```$", re.MULTILINE)
 
-    def clean_json_string(self, raw_output: str) -> str:
-        """Robust parser to extract JSON from markdown or raw LLM output."""
-        cleaned = raw_output.strip()
-        
-        # Try to find markdown block ```json ... ``` or ``` ... ```
-        match = re.search(r'```(?:json)?\s*(.*?)\s*```', cleaned, re.DOTALL)
-        if match:
-            cleaned = match.group(1).strip()
-            
-        # Find first '{' and last '}'
-        start = cleaned.find('{')
-        end = cleaned.rfind('}')
-        if start != -1 and end != -1:
-            cleaned = cleaned[start:end+1]
-            
-        return cleaned
 
-    def parse_response(self, raw_output: str) -> Dict[str, Any]:
-        """Parses output string to dict using clean_json_string."""
-        cleaned = self.clean_json_string(raw_output)
-        try:
-            return json.loads(cleaned)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON from agent output. Raw output length: {len(raw_output)}. Error: {str(e)}")
+def clean_json_string(raw: str) -> str:
+    """Strip markdown fences, leading/trailing whitespace, and slice to the outermost JSON object."""
+    if raw is None:
+        return ""
+    text = raw.strip()
+    text = _FENCE_RE.sub("", text).strip()
+    if not text:
+        return ""
+    first = text.find("{")
+    last = text.rfind("}")
+    if first != -1 and last != -1 and last > first:
+        return text[first:last + 1]
+    return text
+
+
+def parse_review_response(raw_text: str) -> Dict[str, Any]:
+    """
+    Parses an agent review response from raw text.
+    Returns a dict that satisfies the agent_review_response_v1 contract, with sensible defaults.
+    """
+    if not raw_text:
+        return _empty_review(error="empty response")
+
+    cleaned = clean_json_string(raw_text)
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        return _empty_review(error=f"JSON parse error: {e}", raw=raw_text[:500])
+
+
+def _empty_review(error: str = "", raw: Optional[str] = None) -> Dict[str, Any]:
+    out: Dict[str, Any] = {
+        "schema_version": "agent_review_response_v1",
+        "decision": "needs_more_info",
+        "confidence": 0.0,
+        "summary": f"Adapter parse failure: {error}",
+        "items": [],
+        "open_questions": [],
+        "required_actions": [],
+    }
+    if raw is not None:
+        out["_raw"] = raw
+    return out

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "cliproxy": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "CLI Proxy (local)",
+      "options": {
+        "baseURL": "http://127.0.0.1:18317/v1"
+      },
+      "models": {
+        "claude-opus-4-6-thinking": {},
+        "claude-sonnet-4-6": {},
+        "gemini-3-flash-agent": {},
+        "gpt-5.4": {},
+        "gpt-5.4-mini": {}
+      }
+    }
+  },
+  "agent": {
+    "architect": {
+      "model": "cliproxy/claude-sonnet-4-6",
+      "prompt": "{file:./agents/architect.md}"
+    },
+    "dba": {
+      "model": "cliproxy/claude-sonnet-4-6",
+      "prompt": "{file:./agents/dba.md}"
+    },
+    "coder": {
+      "model": "cliproxy/claude-sonnet-4-6",
+      "prompt": "{file:./agents/coder.md}"
+    },
+    "security": {
+      "model": "cliproxy/claude-sonnet-4-6",
+      "prompt": "{file:./agents/security.md}"
+    },
+    "critical": {
+      "model": "cliproxy/claude-sonnet-4-6",
+      "prompt": "{file:./agents/critical.md}"
+    },
+    "synthesizer": {
+      "model": "cliproxy/claude-opus-4-6-thinking",
+      "prompt": "{file:./agents/synthesizer.md}"
+    },
+    "writer": {
+      "model": "cliproxy/claude-opus-4-6-thinking",
+      "prompt": "Ты — технический писатель. Твоя задача — обновить ТЗ на основе выводов Совета. Верни валидный JSON по схеме writer_response_v1."
+    },
+    "plan": {
+      "model": "cliproxy/claude-sonnet-4-6",
+      "prompt": "Ты — аналитик-рецензент. Не используй инструменты. Верни только валидный JSON."
+    }
+  },
+  "permission": {
+    "edit": "allow",
+    "bash": "allow",
+    "webfetch": "allow"
+  }
+}

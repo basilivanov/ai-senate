@@ -1,15 +1,21 @@
 import os
+import tempfile
 import unittest
 from app.runs import storage
 
+
 class TestStorage(unittest.TestCase):
     def setUp(self):
-        storage.DB_PATH = "/opt/ai-lab/ai-senate/data/test_council.db"
+        self._tmp = tempfile.mkdtemp()
+        self._old = storage.DB_PATH
+        storage.DB_PATH = os.path.join(self._tmp, "test_council.db")
         storage.init_db()
 
     def tearDown(self):
-        if os.path.exists(storage.DB_PATH):
-            os.remove(storage.DB_PATH)
+        storage.DB_PATH = self._old
+        if os.path.exists(self._tmp):
+            import shutil
+            shutil.rmtree(self._tmp, ignore_errors=True)
 
     def test_create_and_get_run(self):
         storage.create_run("test-run-123", False)
