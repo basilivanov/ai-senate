@@ -189,7 +189,7 @@ export function RunPage() {
           </TabsContent>
 
           <TabsContent>
-            <RoundLogPanel entries={d.round_log} />
+            <RoundLogPanel entries={d.round_log || []} />
           </TabsContent>
         </Tabs>
       </main>
