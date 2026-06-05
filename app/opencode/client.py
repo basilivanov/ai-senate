@@ -69,6 +69,13 @@ class OpencodeClient:
             raise OpencodeError(f"create_session: no id in response: {data}")
         return sid
 
+    async def abort_session(self, session_id: str) -> None:
+        c = await self._get_client()
+        try:
+            await c.post(f"/session/{session_id}/abort")
+        except Exception:
+            pass
+
     async def list_sessions(self) -> list:
         c = await self._get_client()
         r = await c.get("/session")
