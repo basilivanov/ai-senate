@@ -8,6 +8,34 @@ defaults:
   save_raw_output: true
   save_prompt: true
 
+# Run profiles: declarative presets for different use cases.
+# Each profile defines which jury, how many rounds, whether to run Writer,
+# and whether project context (code digest + git diff) is included by default.
+profiles:
+  full_council:
+    description: "Полный Совет — 4 перспективы, cross-review, writer"
+    jury: default
+    max_rounds: 2
+    writer: true
+    auto_stop_if_clean: true
+    project_context: false
+
+  quick_review:
+    description: "Быстрое ревью — 2 модели, 1 раунд, без writer"
+    jury: lite
+    max_rounds: 1
+    writer: false
+    auto_stop_if_clean: true
+    project_context: false
+
+  code_review:
+    description: "Ревью кода — 4 перспективы + контекст проекта + git diff"
+    jury: default
+    max_rounds: 2
+    writer: true
+    auto_stop_if_clean: true
+    project_context: true
+
 # Perspectives: each one = one reviewer with a focused role + one opencode model.
 # The "key" also maps to .opencode/agents/<key>.md (system prompt) and to the
 # .md file in .opencode/agents/ loaded by OpencodeAgentAdapter.
@@ -25,8 +53,8 @@ perspectives:
     enabled: true
     role: "Coder — реализуемость, алгоритмы, читаемость, тесты"
     provider: "opencode-go"
-    model: "qwen3.7-max"
-    timeout_sec: 240
+    model: "qwen3.7-plus"
+    timeout_sec: 360
 
   minimax:
     enabled: true
@@ -90,8 +118,8 @@ perspectives:
 writer:
   enabled: true
   role: "Writer — обновление спецификации по выводам Совета"
-  provider: "cliproxy"
-  model: "claude-opus-4-6-thinking"
+  provider: "opencode-go"
+  model: "deepseek-v4-flash"
   timeout_sec: 600
 
 # Juries: named groupings of perspectives used by the orchestrator.
@@ -102,5 +130,8 @@ juries:
     - qwen37max
     - minimax
     - deepseekv4pro
+  lite:
+    - glm51
+    - qwen37max
   synthesis:
     - synthesizer

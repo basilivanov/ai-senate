@@ -32,6 +32,8 @@ export interface RunSummary {
   current_round: number;
   auto_stop_if_clean: boolean;
   phase: string;
+  profile?: string;
+  project_path?: string | null;
 }
 
 export type AgentRunStatus = "queued" | "running" | "done" | "failed" | "failed_parse" | "timeout" | "waiting";
@@ -64,6 +66,9 @@ export interface RunDetail {
   finished_at?: string;
   agents: Record<string, AgentRunState>;
   round_log: RoundEntry[];
+  profile?: string;
+  project?: { path: string; files_included: number; truncated: boolean } | null;
+  git_diff?: { diff_type: string; files_changed: number } | null;
 }
 
 export interface Finding {
@@ -153,19 +158,78 @@ export interface AgentPerspective {
 
 export interface JuryConfig {
   default: string[];
+  lite: string[];
   synthesis: string[];
+  [key: string]: string[];
+}
+
+export interface ProfileConfig {
+  description: string;
+  jury: string;
+  max_rounds: number;
+  writer: boolean;
+  auto_stop_if_clean: boolean;
+  project_context: boolean;
 }
 
 export interface PerspectivesConfig {
   perspectives: AgentPerspective[];
   writer: AgentPerspective | null;
   juries: JuryConfig;
+  profiles: Record<string, ProfileConfig>;
+}
+
+export interface DocumentInput {
+  filename: string;
+  role: string;
+  content: string;
+}
+
+export interface ProjectInput {
+  path: string;
+  file_patterns: string[];
+  exclude_patterns: string[];
+  max_file_size_kb: number;
+  max_total_tokens: number;
+}
+
+export interface GitDiffInput {
+  project_path: string;
+  diff_type: string;
+  max_lines: number;
 }
 
 export interface CreateRunRequest {
   spec_text: string;
+  documents: DocumentInput[];
   owner_input: string;
   new_document: boolean;
+  profile: string;
+  project: ProjectInput | null;
+  git_diff: GitDiffInput | null;
   max_rounds: number;
   auto_stop_if_clean: boolean;
+}
+
+export interface ProjectDigestResponse {
+  path: string;
+  tree: string;
+  files: DocumentInput[];
+  total_tokens_estimate: number;
+  truncated: boolean;
+}
+
+export interface GitDiffResponse {
+  project_path: string;
+  diff_type: string;
+  diff_content: string;
+  files_changed: number;
+  insertions: number;
+  deletions: number;
+  truncated: boolean;
+  file_list: string[];
+}
+
+export interface UpdatedDocsResponse {
+  documents: Record<string, string>;
 }

@@ -13,6 +13,8 @@ from pydantic import BaseModel
 from app.runs import storage, service
 from app.opencode import get_client
 from app.council_core.contracts import AgentResponseContract, ConsensusResultContract
+from app.council_core.project_digest import build_project_digest, validate_project_path
+from app.council_core.git_context import get_git_diff
 
 
 log = logging.getLogger("ai_senate.api")
@@ -32,10 +34,34 @@ CONSENSUS_YAML = os.path.join(PROJECT_ROOT, "app", "config", "consensus.yaml")
 
 # ----------------------- Models -----------------------
 
+class DocumentInput(BaseModel):
+    filename: str
+    role: str = ""
+    content: str
+
+
+class GitDiffInput(BaseModel):
+    project_path: str
+    diff_type: str = "head~1"
+    max_lines: int = 2000
+
+
+class ProjectInput(BaseModel):
+    path: str
+    file_patterns: List[str] = []
+    exclude_patterns: List[str] = []
+    max_file_size_kb: int = 50
+    max_total_tokens: int = 15000
+
+
 class CreateRunBody(BaseModel):
     spec_text: str = ""
+    documents: List[DocumentInput] = []
     owner_input: str = ""
     new_document: bool = False
+    profile: str = "full_council"
+    project: Optional[ProjectInput] = None
+    git_diff: Optional[GitDiffInput] = None
     max_rounds: int = 2
     auto_stop_if_clean: bool = True
 
@@ -68,7 +94,7 @@ def _read_text(path: str) -> str:
 
 def _load_perspectives_config() -> Dict[str, Any]:
     if not os.path.exists(AGENTS_YAML):
-        return {"perspectives": [], "writer": None, "juries": {"default": [], "synthesis": []}}
+        return {"perspectives": [], "writer": None, "juries": {"default": [], "synthesis": []}, "profiles": {}}
     try:
         with open(AGENTS_YAML, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f) or {}
@@ -101,7 +127,8 @@ def _load_perspectives_config() -> Dict[str, Any]:
         }
 
     juries = cfg.get("juries") or {"default": [], "synthesis": []}
-    return {"perspectives": perspectives, "writer": writer, "juries": juries}
+    profiles = cfg.get("profiles") or {}
+    return {"perspectives": perspectives, "writer": writer, "juries": juries, "profiles": profiles}
 
 
 # ----------------------- Health & config -----------------------
@@ -129,7 +156,7 @@ async def get_config():
 
 @router.get("/spec")
 async def get_spec():
-    return {"content": _read_text(SPEC_FILE)}
+    return {"content": _read_text(SPEC_FILE), "exists": os.path.exists(SPEC_FILE)}
 
 
 @router.put("/spec")
@@ -138,6 +165,48 @@ async def put_spec(body: SpecBody):
     with open(SPEC_FILE, "w", encoding="utf-8") as f:
         f.write(body.content or "")
     return {"status": "ok"}
+
+
+# ----------------------- Project -----------------------
+
+@router.post("/project/digest")
+async def project_digest(body: ProjectInput):
+    if not validate_project_path(body.path):
+        raise HTTPException(status_code=400, detail=f"Path not in allowed roots: {body.path}")
+    import asyncio
+    loop = asyncio.get_event_loop()
+    try:
+        ctx = await loop.run_in_executor(
+            None,
+            lambda: build_project_digest(
+                project_path=body.path,
+                file_patterns=body.file_patterns or None,
+                exclude_patterns=body.exclude_patterns or None,
+                max_file_size_kb=body.max_file_size_kb,
+                max_total_tokens=body.max_total_tokens,
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return ctx.model_dump()
+
+
+@router.post("/project/git-diff")
+async def project_git_diff(body: GitDiffInput):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    try:
+        result = await loop.run_in_executor(
+            None,
+            lambda: get_git_diff(
+                project_path=body.project_path,
+                diff_type=body.diff_type,
+                max_lines=body.max_lines,
+            ),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return result.model_dump()
 
 
 # ----------------------- Runs -----------------------
@@ -151,13 +220,46 @@ async def list_runs():
 async def create_run(body: CreateRunBody, background_tasks: BackgroundTasks):
     if body.new_document and not (body.owner_input or "").strip():
         raise HTTPException(status_code=400, detail="owner_input required when new_document=true")
+
     run_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    project_ctx = None
+    if body.project:
+        try:
+            project_ctx = build_project_digest(
+                project_path=body.project.path,
+                file_patterns=body.project.file_patterns or None,
+                exclude_patterns=body.project.exclude_patterns or None,
+                max_file_size_kb=body.project.max_file_size_kb,
+                max_total_tokens=body.project.max_total_tokens,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    git_diff_ctx = None
+    if body.git_diff:
+        try:
+            from app.council_core.contracts import GitDiffContext
+            diff_result = get_git_diff(
+                project_path=body.git_diff.project_path,
+                diff_type=body.git_diff.diff_type,
+                max_lines=body.git_diff.max_lines,
+            )
+            git_diff_ctx = GitDiffContext(**diff_result.model_dump(exclude={"project_path"}))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     storage.create_run(
         run_id,
         body.new_document,
         max_rounds=max(1, min(3, body.max_rounds)),
         auto_stop_if_clean=body.auto_stop_if_clean,
+        profile=body.profile,
+        project_path=body.project.path if body.project else None,
     )
+
+    docs = [d.model_dump() for d in body.documents] if body.documents else []
+
     background_tasks.add_task(
         service.run_council_task,
         run_id=run_id,
@@ -166,6 +268,10 @@ async def create_run(body: CreateRunBody, background_tasks: BackgroundTasks):
         new_document=body.new_document,
         max_rounds=body.max_rounds,
         auto_stop_if_clean=body.auto_stop_if_clean,
+        profile=body.profile,
+        documents=docs,
+        project_context=project_ctx.model_dump() if project_ctx else None,
+        git_diff_context=git_diff_ctx.model_dump() if git_diff_ctx else None,
     )
     return storage.get_run(run_id)
 
@@ -185,7 +291,7 @@ async def delete_run(run_id: str):
     run_dir = os.path.join(RUNS_DIR, run_id)
     if os.path.isdir(run_dir):
         shutil.rmtree(run_dir, ignore_errors=True)
-    return Response(status_code=204)
+    return Response(status=204)
 
 
 @router.get("/runs/{run_id}")
@@ -232,10 +338,27 @@ async def get_consensus(run_id: str):
 
 @router.get("/runs/{run_id}/updated-spec")
 async def get_updated_spec(run_id: str):
-    path = os.path.join(RUNS_DIR, run_id, "updated-spec.md")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="updated-spec not found")
-    return {"content": _read_text(path)}
+    path_single = os.path.join(RUNS_DIR, run_id, "updated-spec.md")
+    if os.path.exists(path_single):
+        return {"content": _read_text(path_single)}
+    raise HTTPException(status_code=404, detail="updated-spec not found")
+
+
+@router.get("/runs/{run_id}/updated-docs")
+async def get_updated_docs(run_id: str):
+    updated_dir = os.path.join(RUNS_DIR, run_id, "updated")
+    if os.path.isdir(updated_dir):
+        docs = {}
+        for fname in sorted(os.listdir(updated_dir)):
+            fpath = os.path.join(updated_dir, fname)
+            if os.path.isfile(fpath):
+                docs[fname] = _read_text(fpath)
+        if docs:
+            return {"documents": docs}
+    updated_single = os.path.join(RUNS_DIR, run_id, "updated-spec.md")
+    if os.path.exists(updated_single):
+        return {"documents": {"updated-spec.md": _read_text(updated_single)}}
+    raise HTTPException(status_code=404, detail="no updated documents found")
 
 
 @router.get("/runs/{run_id}/changes")

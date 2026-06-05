@@ -5,9 +5,14 @@ import type {
   ConsensusResult,
   CreateRunRequest,
   FindingsByCategory,
+  GitDiffInput,
+  GitDiffResponse,
   PerspectivesConfig,
+  ProjectDigestResponse,
+  ProjectInput,
   RunDetail,
   RunSummary,
+  UpdatedDocsResponse,
 } from "./types";
 
 const BASE = "/api";
@@ -34,6 +39,7 @@ export const api = {
   getFindings: (id: string) => http<FindingsByCategory>(`/runs/${id}/findings`),
   getConsensus: (id: string) => http<ConsensusResult>(`/runs/${id}/consensus`),
   getUpdatedSpec: (id: string) => http<{ content: string }>(`/runs/${id}/updated-spec`),
+  getUpdatedDocs: (id: string) => http<UpdatedDocsResponse>(`/runs/${id}/updated-docs`),
   getChanges: (id: string) => http<ChangesSummary>(`/runs/${id}/changes`),
   getRoundLog: (id: string) => http<{ round_log: Array<Record<string, unknown>> }>(`/runs/${id}/round-log`),
   getAgentStatuses: (id: string) => http<AgentStatusRow[]>(`/runs/${id}/agents`),
@@ -45,4 +51,8 @@ export const api = {
   saveSpec: (content: string) =>
     http<{ status: string }>("/spec", { method: "PUT", body: JSON.stringify({ content }) }),
   health: () => http<{ status: string; opencode: { reachable: boolean; base_url: string } }>("/health"),
+  projectDigest: (body: ProjectInput) =>
+    http<ProjectDigestResponse>("/project/digest", { method: "POST", body: JSON.stringify(body) }),
+  projectGitDiff: (body: GitDiffInput) =>
+    http<GitDiffResponse>("/project/git-diff", { method: "POST", body: JSON.stringify(body) }),
 };

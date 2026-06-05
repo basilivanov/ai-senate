@@ -86,7 +86,22 @@ class OpencodeAgentAdapter:
             }
 
         parsed = parse_review_response(text)
-        if parsed.get("_raw"):
+        # Fallback for writer-style agents that return plain text instead of JSON
+        if parsed.get("_raw") and len(text.strip()) > 200:
+            parsed = {
+                "schema_version": "writer_response_v1",
+                "status": "draft_created",
+                "summary": "Writer returned plain text; treated as updated_document_content.",
+                "updated_document_content": text,
+                "output_file": "",
+                "owner_input_processed": True,
+                "owner_input_applied": True,
+                "unresolved_questions_kept": True,
+                "blockers_preserved": True,
+                "major_risks_preserved": True,
+                "notes": ["writer output was not JSON; auto-wrapped as updated_document_content"],
+            }
+        elif parsed.get("_raw"):
             return {
                 "agent": self.name,
                 "status": "failed_parse",
@@ -149,59 +164,95 @@ class OpencodeAgentAdapter:
         workspace = contract.get("workspace", {}) or {}
         spec_path = workspace.get("spec_file")
         owner_path = workspace.get("owner_input_file")
-
-        spec_content = self._read_file(spec_path)
-        owner_content = self._read_file(owner_path)
+        documents = workspace.get("documents", []) or []
+        project = workspace.get("project")
+        git_diff = workspace.get("git_diff")
 
         instructions = contract.get("instructions", {}) or {}
         focus = instructions.get("focus", []) or []
         focus_str = ", ".join(focus) if focus else "general review"
 
-        return (
-            f"You are acting as: {contract.get('role', 'reviewer')}\n"
-            f"Task: {contract.get('task', 'Review the specification.')}\n"
-            f"Agent key: {self.agent_key}\n"
-            f"Language: {instructions.get('language', 'ru')}\n"
-            f"Owner input priority: {instructions.get('owner_input_priority', 'high')}\n"
-            f"Focus areas: {focus_str}\n"
-            f"Schema: {contract.get('output_schema', 'agent_review_response_v1')}\n"
-            "\n"
-            "--- CURRENT SPECIFICATION ---\n"
-            f"{spec_content or '[No current specification / starting from scratch]'}\n"
-            "\n"
-            "--- OWNER INPUT (USER COMMENT) ---\n"
-            f"{owner_content or '[No comments provided]'}\n"
-            "\n"
-            "--- INSTRUCTIONS ---\n"
-            "- Return ONLY a valid JSON object matching agent_review_response_v1.\n"
-            "- Do NOT include any prose before or after the JSON.\n"
-            "- If you must wrap JSON in a code block, use ```json fences.\n"
-            "\n"
-            "Required JSON shape:\n"
-            "{\n"
-            "  \"schema_version\": \"agent_review_response_v1\",\n"
-            "  \"agent\": \"<your agent key>\",\n"
-            "  \"role\": \"<your role>\",\n"
-            "  \"decision\": \"accept | accept_with_changes | needs_more_info | reject | block\",\n"
-            "  \"confidence\": 0.0,\n"
-            "  \"summary\": \"...\",\n"
-            "  \"items\": [\n"
-            "    {\n"
-            "      \"id\": \"<agent>-finding-001\",\n"
-            "      \"type\": \"info | suggestion | risk | major_risk | blocker | question\",\n"
-            "      \"category\": \"...\",\n"
-            "      \"severity\": \"low | medium | high\",\n"
-            "      \"title\": \"...\",\n"
-            "      \"description\": \"...\",\n"
-            "      \"evidence\": \"...\",\n"
-            "      \"recommendation\": \"...\",\n"
-            "      \"confidence\": 0.0\n"
-            "    }\n"
-            "  ],\n"
-            "  \"open_questions\": [\"...\"],\n"
-            "  \"required_actions\": [\"...\"]\n"
-            "}\n"
-        )
+        parts = []
+
+        # Multi-doc or single-doc
+        if documents:
+            for doc in documents:
+                fname = doc.get("filename", "doc")
+                role = doc.get("role", "")
+                content = doc.get("content", "")
+                role_str = f" ({role})" if role else ""
+                parts.append(f"=== Документ: {fname}{role_str} ===\n{content}")
+        else:
+            spec_content = self._read_file(spec_path)
+            parts.append(f"--- CURRENT SPECIFICATION ---\n{spec_content or '[No current specification / starting from scratch]'}")
+
+        # Owner input
+        owner_content = self._read_file(owner_path)
+        parts.append(f"\n--- OWNER INPUT (USER COMMENT) ---\n{owner_content or '[No comments provided]'}")
+
+        # Project context
+        if project:
+            parts.append(f"\n=== PROJECT: {project.get('path', '')} ===")
+            tree = project.get("tree", "")
+            if tree:
+                parts.append(f"=== PROJECT TREE ===\n{tree}")
+            for f in project.get("files", []) or []:
+                parts.append(f"\n=== FILE: {f.get('filename', '')} ===\n{f.get('content', '')}")
+            if project.get("truncated"):
+                parts.append("\n[Project digest was truncated due to token limit]")
+
+        # Git diff
+        if git_diff and git_diff.get("diff_content"):
+            fc = git_diff.get("files_changed", 0)
+            ins = git_diff.get("insertions", 0)
+            dels = git_diff.get("deletions", 0)
+            parts.append(f"\n=== GIT DIFF ({fc} files, +{ins}/-{dels} lines) ===")
+            parts.append(git_diff["diff_content"])
+            if git_diff.get("truncated"):
+                parts.append("\n[Diff was truncated due to line limit]")
+            parts.append("=== END GIT DIFF ===")
+            parts.append("Review these changes against the specification and codebase.")
+
+        # Instructions
+        parts.append(f"\n--- INSTRUCTIONS ---")
+        parts.append(f"You are acting as: {contract.get('role', 'reviewer')}")
+        parts.append(f"Task: {contract.get('task', 'Review the specification.')}")
+        parts.append(f"Agent key: {self.agent_key}")
+        parts.append(f"Language: {instructions.get('language', 'ru')}")
+        parts.append(f"Owner input priority: {instructions.get('owner_input_priority', 'high')}")
+        parts.append(f"Focus areas: {focus_str}")
+        parts.append(f"Schema: {contract.get('output_schema', 'agent_review_response_v1')}")
+        parts.append(f"- Return ONLY a valid JSON object matching agent_review_response_v1.")
+        parts.append(f"- Do NOT include any prose before or after the JSON.")
+        parts.append(f"- If you must wrap JSON in a code block, use ```json fences.")
+
+        parts.append(f"""
+Required JSON shape:
+{{
+  "schema_version": "agent_review_response_v1",
+  "agent": "<your agent key>",
+  "role": "<your role>",
+  "decision": "accept | accept_with_changes | needs_more_info | reject | block",
+  "confidence": 0.0,
+  "summary": "...",
+  "items": [
+    {{
+      "id": "<agent>-finding-001",
+      "type": "info | suggestion | risk | major_risk | blocker | question",
+      "category": "...",
+      "severity": "low | medium | high",
+      "title": "...",
+      "description": "...",
+      "evidence": "...",
+      "recommendation": "...",
+      "confidence": 0.0
+    }}
+  ],
+  "open_questions": ["..."],
+  "required_actions": ["..."]
+}}""")
+
+        return "\n".join(parts)
 
     @staticmethod
     def _read_file(path: Optional[str]) -> str:

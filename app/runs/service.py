@@ -2,14 +2,17 @@ import os
 import json
 import asyncio
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import yaml
 
 from app.runs import storage
 from app.council_core import consensus, findings, writer as writer_module
 from app.agent_adapters import OpencodeAgentAdapter
-from app.council_core.contracts import AgentRequestContract, Workspace, Instructions
+from app.council_core.contracts import (
+    AgentRequestContract, Workspace, Instructions,
+    DocumentRef, ProjectContext, GitDiffContext,
+)
 
 
 PROJECT_ROOT = os.environ.get("AI_SENATE_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -24,7 +27,6 @@ def _load_agent_config() -> Dict[str, Any]:
 
 
 def _build_adapter_config(perspective_cfg: Dict[str, Any], defaults: Dict[str, Any]) -> Dict[str, Any]:
-    """Merges a perspective config with defaults to produce the adapter config dict."""
     return {
         "agent": perspective_cfg.get("agent") or perspective_cfg.get("name"),
         "provider": perspective_cfg.get("provider") or defaults.get("provider", "cliproxy"),
@@ -114,7 +116,7 @@ def _get_jury(yaml_cfg: Dict[str, Any], name: str = "default") -> List[str]:
 
 
 def _get_perspective(yaml_cfg: Dict[str, Any], name: str) -> Dict[str, Any]:
-    perspectives = yaml_cfg.get("perspectives", {}) or {}
+    perspectives = yaml_cfg.get("perspectives") or {}
     cfg = perspectives.get(name) or {}
     if not cfg:
         return {"name": name}
@@ -124,6 +126,19 @@ def _get_perspective(yaml_cfg: Dict[str, Any], name: str) -> Dict[str, Any]:
     return cfg
 
 
+def _get_profile(yaml_cfg: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
+    profiles = yaml_cfg.get("profiles", {}) or {}
+    if profile_name in profiles:
+        return profiles[profile_name]
+    return {
+        "jury": "default",
+        "max_rounds": 2,
+        "writer": True,
+        "auto_stop_if_clean": True,
+        "project_context": False,
+    }
+
+
 async def run_council_task(
     run_id: str,
     spec_text: str,
@@ -131,39 +146,92 @@ async def run_council_task(
     new_document: bool,
     max_rounds: int = 2,
     auto_stop_if_clean: bool = True,
+    profile: str = "full_council",
+    documents: Optional[List[Dict[str, str]]] = None,
+    project_context: Optional[Dict[str, Any]] = None,
+    git_diff_context: Optional[Dict[str, Any]] = None,
 ):
-    """
-    Background task orchestrating the multi-round AI Council run process.
-    Uses the opencode REST API as the single entry point for all agent calls.
-    """
+    yaml_cfg = _load_agent_config()
+    profile_cfg = _get_profile(yaml_cfg, profile)
+    jury_name = profile_cfg.get("jury", "default")
+    jury = _get_jury(yaml_cfg, jury_name)
+    writer_enabled = profile_cfg.get("writer", True)
+
+    effective_max_rounds = max_rounds
+    effective_auto_stop = auto_stop_if_clean
+
     run_dir = os.path.join(RUNS_DIR, run_id)
     os.makedirs(run_dir, exist_ok=True)
-
-    yaml_cfg = _load_agent_config()
-    jury = _get_jury(yaml_cfg, "default")
 
     # 1. Save input files & init run state
     storage.update_run_progress(run_id, status="running", phase="round_1_review", current_round=1)
     spec_file = os.path.join(run_dir, "input-spec.md")
     owner_file = os.path.join(run_dir, "owner-input.md")
+
+    if documents:
+        input_dir = os.path.join(run_dir, "input")
+        os.makedirs(input_dir, exist_ok=True)
+        doc_refs = []
+        for doc in documents:
+            fname = doc.get("filename", "doc.md")
+            role = doc.get("role", "")
+            content = doc.get("content", "")
+            fpath = os.path.join(input_dir, fname)
+            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+            with open(fpath, "w", encoding="utf-8") as f:
+                f.write(content)
+            doc_refs.append(DocumentRef(filename=fname, role=role, content=content))
+        # Also write spec_file for backward compat — first doc or combined
+        if not spec_text.strip() and doc_refs:
+            spec_text = doc_refs[0].content
+    else:
+        doc_refs = []
+
     with open(spec_file, "w", encoding="utf-8") as f:
         f.write(spec_text)
     with open(owner_file, "w", encoding="utf-8") as f:
         f.write(owner_input)
+
+    # Build workspace extensions
+    project_ctx = None
+    if project_context:
+        project_ctx = ProjectContext(**project_context)
+
+    git_diff_ctx = None
+    if git_diff_context:
+        git_diff_ctx = GitDiffContext(**git_diff_context)
+
+    workspace_kwargs = {}
+    if doc_refs:
+        workspace_kwargs["documents"] = doc_refs
+    if project_ctx:
+        workspace_kwargs["project"] = project_ctx
+    if git_diff_ctx:
+        workspace_kwargs["git_diff"] = git_diff_ctx
 
     run_data = {
         "run_id": run_id,
         "status": "running",
         "phase": "round_1_review",
         "current_round": 1,
-        "max_rounds": max_rounds,
-        "auto_stop_if_clean": auto_stop_if_clean,
+        "max_rounds": effective_max_rounds,
+        "auto_stop_if_clean": effective_auto_stop,
         "new_document": new_document,
         "started_at": datetime.now().isoformat(),
         "round_log": [],
         "agents": {name: {"status": "queued", "duration_ms": 0, "error": None} for name in jury},
+        "profile": profile,
+        "project": {
+            "path": project_context.get("path") if project_context else None,
+            "files_included": len(project_context.get("files", [])) if project_context else 0,
+            "truncated": project_context.get("truncated", False) if project_context else False,
+        } if project_context else None,
+        "git_diff": {
+            "diff_type": git_diff_context.get("diff_type") if git_diff_context else None,
+            "files_changed": git_diff_context.get("files_changed", 0) if git_diff_context else 0,
+        } if git_diff_context else None,
     }
-    if yaml_cfg.get("writer", {}).get("enabled", True):
+    if writer_enabled and yaml_cfg.get("writer", {}).get("enabled", True):
         run_data["agents"]["writer"] = {"status": "waiting", "duration_ms": 0, "error": None}
     update_run_file(run_id, run_data)
 
@@ -171,11 +239,15 @@ async def run_council_task(
         json.dump({
             "run_id": run_id,
             "new_document": new_document,
+            "profile": profile,
+            "jury": jury,
             "spec_length": len(spec_text),
             "owner_input_length": len(owner_input),
-            "max_rounds": max_rounds,
-            "auto_stop_if_clean": auto_stop_if_clean,
-            "jury": jury,
+            "max_rounds": effective_max_rounds,
+            "auto_stop_if_clean": effective_auto_stop,
+            "documents_count": len(doc_refs),
+            "has_project_context": project_ctx is not None,
+            "has_git_diff": git_diff_ctx is not None,
         }, f, indent=2, ensure_ascii=False)
 
     # ==================== ROUND 1: INDEPENDENT REVIEW ====================
@@ -183,13 +255,17 @@ async def run_council_task(
     tasks = []
     for name in jury:
         perspective = _get_perspective(yaml_cfg, name)
+        workspace = Workspace(
+            root=PROJECT_ROOT, spec_file=spec_file, owner_input_file=owner_file,
+            **workspace_kwargs,
+        )
         contract = AgentRequestContract(
             run_id=run_id,
             agent=name,
             role=perspective.get("role", "reviewer"),
             task="Round 1: Review the specification independently. Return structured findings.",
             new_document=new_document,
-            workspace=Workspace(root=PROJECT_ROOT, spec_file=spec_file, owner_input_file=owner_file),
+            workspace=workspace,
             instructions=Instructions(focus=["requirements clarity", "MVP scope", "architecture",
                                             "missing contracts", "risks", "blockers", "test strategy",
                                             "implementation complexity"]),
@@ -243,10 +319,10 @@ async def run_council_task(
                     + consensus_res.agent_status.get("timeout", 0))
     failed_ratio = failed_count / active_count if active_count > 0 else 0.0
     is_clean = (blocker_count == 0 and major_risk_count == 0 and question_count < 3 and failed_ratio <= 0.5)
-    should_stop = (max_rounds == 1) or (auto_stop_if_clean and is_clean)
+    should_stop = (effective_max_rounds == 1) or (effective_auto_stop and is_clean)
 
     # ==================== ROUND 2: CROSS-REVIEW ====================
-    if not should_stop and max_rounds >= 2:
+    if not should_stop and effective_max_rounds >= 2:
         storage.update_run_progress(run_id, phase="round_2_cross_review", current_round=2)
         run_data["phase"] = "round_2_cross_review"
         run_data["current_round"] = 2
@@ -265,13 +341,17 @@ async def run_council_task(
                 "Return a valid JSON object with the same shape as Round 1 "
                 "(schema agent_review_response_v1)."
             )
+            workspace = Workspace(
+                root=PROJECT_ROOT, spec_file=spec_file, owner_input_file=owner_file,
+                **workspace_kwargs,
+            )
             contract = AgentRequestContract(
                 run_id=run_id,
                 agent=name,
                 role=perspective.get("role", "reviewer"),
                 task=task_desc,
                 new_document=new_document,
-                workspace=Workspace(root=PROJECT_ROOT, spec_file=spec_file, owner_input_file=owner_file),
+                workspace=workspace,
                 instructions=Instructions(focus=["cross-review"]),
             )
             contract_json = contract.model_dump_json(indent=2)
@@ -312,46 +392,50 @@ async def run_council_task(
         update_run_file(run_id, run_data)
 
     # ==================== WRITER ====================
-    storage.update_run_progress(run_id, phase="writer")
-    run_data["phase"] = "writer"
-    update_run_file(run_id, run_data)
-
-    if yaml_cfg.get("writer", {}).get("enabled", True):
-        async with lock:
-            run_data["agents"]["writer"]["status"] = "running"
-            update_run_file(run_id, run_data)
-
-        updated_spec_file = os.path.join(run_dir, "updated-spec.md")
-        writer_res = await writer_module.run_writer(
-            run_id=run_id,
-            new_document=new_document,
-            spec_file=spec_file,
-            owner_input_file=owner_file,
-            findings_file=os.path.join(run_dir, "findings.json"),
-            consensus_file=os.path.join(run_dir, "consensus.json"),
-            agent_outputs_dir=os.path.join(run_dir, "agents"),
-            output_file=updated_spec_file,
-        )
-        _build_changes_summary(run_dir, writer_res, consensus_res)
-
-        async with lock:
-            run_data["agents"]["writer"] = {
-                "status": "done" if writer_res.status != "failed" else "failed",
-                "duration_ms": 0,
-                "error": None if writer_res.status != "failed" else writer_res.summary,
-            }
-            update_run_file(run_id, run_data)
-
-        run_data["round_log"].append({
-            "round": "writer",
-            "phase": "writer",
-            "status": "done" if writer_res.status != "failed" else "failed",
-            "summary": writer_res.summary,
-        })
+    if writer_enabled:
+        storage.update_run_progress(run_id, phase="writer")
+        run_data["phase"] = "writer"
         update_run_file(run_id, run_data)
 
+        writer_cfg = yaml_cfg.get("writer", {}).get("enabled", True)
+        if writer_cfg:
+            async with lock:
+                run_data["agents"]["writer"]["status"] = "running"
+                update_run_file(run_id, run_data)
+
+            is_multi_doc = len(doc_refs) > 1
+            updated_spec_file = os.path.join(run_dir, "updated-spec.md")
+            writer_res = await writer_module.run_writer(
+                run_id=run_id,
+                new_document=new_document,
+                spec_file=spec_file,
+                owner_input_file=owner_file,
+                findings_file=os.path.join(run_dir, "findings.json"),
+                consensus_file=os.path.join(run_dir, "consensus.json"),
+                agent_outputs_dir=os.path.join(run_dir, "agents"),
+                output_file=updated_spec_file,
+                documents=doc_refs if is_multi_doc else None,
+            )
+            _build_changes_summary(run_dir, writer_res, consensus_res)
+
+            async with lock:
+                run_data["agents"]["writer"] = {
+                    "status": "done" if writer_res.status != "failed" else "failed",
+                    "duration_ms": 0,
+                    "error": None if writer_res.status != "failed" else writer_res.summary,
+                }
+                update_run_file(run_id, run_data)
+
+            run_data["round_log"].append({
+                "round": "writer",
+                "phase": "writer",
+                "status": "done" if writer_res.status != "failed" else "failed",
+                "summary": writer_res.summary,
+            })
+            update_run_file(run_id, run_data)
+
     # ==================== ROUND 3: FINAL CHECK ====================
-    if max_rounds >= 3:
+    if effective_max_rounds >= 3:
         storage.update_run_progress(run_id, phase="round_3_final_check", current_round=3)
         run_data["phase"] = "round_3_final_check"
         run_data["current_round"] = 3
@@ -363,6 +447,10 @@ async def run_council_task(
         for name in jury:
             perspective = _get_perspective(yaml_cfg, name)
             updated_spec_path = os.path.join(run_dir, "updated-spec.md")
+            workspace = Workspace(
+                root=PROJECT_ROOT, spec_file=updated_spec_path, owner_input_file=owner_file,
+                **workspace_kwargs,
+            )
             contract = AgentRequestContract(
                 run_id=run_id,
                 agent=name,
@@ -375,7 +463,7 @@ async def run_council_task(
                     "lost_major_risks (list), new_issues (list), summary (string)."
                 ),
                 new_document=new_document,
-                workspace=Workspace(root=PROJECT_ROOT, spec_file=updated_spec_path, owner_input_file=owner_file),
+                workspace=workspace,
                 instructions=Instructions(focus=["final-check"]),
             )
             contract_json = contract.model_dump_json(indent=2)
@@ -438,11 +526,6 @@ def _read_round_results(run_dir: str, round_num: int, jury: List[str]) -> Dict[s
 
 
 def _merge_round2(round1_findings, cross_reviews):
-    """
-    Compatibility shim: cross-review agents return the same agent_review_response_v1 shape.
-    We treat Round 2 as a fresh round whose parsed_output items are merged with Round 1.
-    For dedicated confirm/dispute schema we'd extend later.
-    """
     import copy
     merged = copy.deepcopy(round1_findings)
     seen_ids = {f["id"] for cat in merged.values() for f in cat}

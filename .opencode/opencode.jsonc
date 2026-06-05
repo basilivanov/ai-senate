@@ -14,19 +14,6 @@
         "gpt-5.4": {},
         "gpt-5.4-mini": {}
       }
-    },
-    "opencode-go": {
-      "name": "OpenCode Go",
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "https://opencode.gocode.ai/v1"
-      },
-      "models": {
-        "glm-5.1": {},
-        "qwen3.7-max": {},
-        "minimax-m3": {},
-        "deepseek-v4-pro": {}
-      }
     }
   },
   "agent": {
@@ -35,7 +22,7 @@
       "prompt": "{file:./agents/glm51.md}"
     },
     "qwen37max": {
-      "model": "opencode-go/qwen3.7-max",
+      "model": "opencode-go/qwen3.7-plus",
       "prompt": "{file:./agents/qwen37max.md}"
     },
     "minimax": {

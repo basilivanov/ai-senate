@@ -1,10 +1,38 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+
+class DocumentRef(BaseModel):
+    filename: str
+    role: str = ""
+    content: str
+
+
+class ProjectContext(BaseModel):
+    path: str
+    tree: str = ""
+    files: List[DocumentRef] = []
+    total_tokens_estimate: int = 0
+    truncated: bool = False
+
+
+class GitDiffContext(BaseModel):
+    diff_content: str = ""
+    diff_type: str = ""
+    files_changed: int = 0
+    insertions: int = 0
+    deletions: int = 0
+    truncated: bool = False
+    file_list: List[str] = []
+
+
 class Workspace(BaseModel):
     root: str
     spec_file: str
     owner_input_file: str
+    documents: List[DocumentRef] = []
+    project: Optional[ProjectContext] = None
+    git_diff: Optional[GitDiffContext] = None
 
 class Instructions(BaseModel):
     language: str = "ru"

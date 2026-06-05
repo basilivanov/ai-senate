@@ -13,21 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatDate, formatDuration, phaseLabel, statusColor, FINDING_TYPE_LABEL, FINDING_TYPE_TONE, SEVERITY_TONE } from "@/lib/utils";
+import { AgentSidebar } from "@/components/AgentSidebar";
 import type { Finding } from "@/lib/types";
-
-const AGENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
-  architect: Shield,
-  dba: Database,
-  coder: Code,
-  security: Shield,
-  critical: Bug,
-  synthesizer: Brain,
-  writer: Sparkles,
-  glm51: Bug,
-  qwen37max: Code,
-  minimax: Shield,
-  deepseekv4pro: Database,
-};
 
 export function RunPage() {
   const { id = "" } = useParams<{ id: string }>();
@@ -38,12 +25,13 @@ export function RunPage() {
     queryFn: () => api.getRun(id),
     refetchInterval: (q) => {
       const data = q.state.data as { status?: string } | undefined;
-      return data && ["done", "failed", "blocked", "rejected"].includes(String(data.status)) ? false : 4000;
+      return data && ["done", "failed", "blocked", "rejected"].includes(String(data.status)) ? false : 2000;
     },
   });
   const findings = useQuery({ queryKey: ["findings", id], queryFn: () => api.getFindings(id), enabled: !!run.data });
   const consensus = useQuery({ queryKey: ["consensus", id], queryFn: () => api.getConsensus(id), enabled: !!run.data });
   const spec = useQuery({ queryKey: ["updated-spec", id], queryFn: () => api.getUpdatedSpec(id), enabled: !!run.data });
+  const updatedDocs = useQuery({ queryKey: ["updated-docs", id], queryFn: () => api.getUpdatedDocs(id), enabled: !!run.data });
   const changes = useQuery({ queryKey: ["changes", id], queryFn: () => api.getChanges(id), enabled: !!run.data });
 
   const accept = useMutation({
@@ -57,6 +45,10 @@ export function RunPage() {
     return Object.entries(data.agents).map(([key, a]) => ({ key, ...a }));
   }, [run.data]);
 
+  const hasMultiDoc = useMemo(() => {
+    return updatedDocs.data && Object.keys(updatedDocs.data.documents || {}).length > 1;
+  }, [updatedDocs.data]);
+
   if (run.isLoading) return <CenterShell><Spinner /> Загрузка запуска…</CenterShell>;
   if (run.isError) return <CenterShell><Alert variant="destructive"><AlertTitle>Не удалось загрузить</AlertTitle><AlertDescription>{String(run.error)}</AlertDescription></Alert></CenterShell>;
   if (!run.data) return null;
@@ -68,10 +60,18 @@ export function RunPage() {
     (f?.blockers.length || 0) + (f?.major_risks.length || 0) + (f?.risks.length || 0) + (f?.suggestions.length || 0) + (f?.questions.length || 0) + (f?.infos.length || 0);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
-      <SubHeader />
+    <div className="flex h-[calc(100vh-3rem)]">
+      {/* Left sidebar: agents */}
+      <AgentSidebar
+        agents={d.agents}
+        phase={d.phase}
+        currentRound={d.current_round}
+        maxRounds={d.max_rounds}
+        profile={d.profile}
+      />
 
-      <main className="container py-6 space-y-6">
+      {/* Right: main content */}
+      <main className="flex-1 overflow-y-auto p-6 space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -80,6 +80,7 @@ export function RunPage() {
               </Link>
               <span>·</span>
               <span className="font-mono">{d.run_id}</span>
+              {d.profile && <><span>·</span><Badge variant="outline" className="text-[10px]">{d.profile}</Badge></>}
             </div>
             <h1 className="text-2xl font-semibold mt-1">{d.new_document ? "Новый документ" : "Ревью ТЗ"}</h1>
             <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -91,6 +92,11 @@ export function RunPage() {
               {d.started_at && <><span>·</span><span>Started: {formatDate(d.started_at)}</span></>}
               {d.finished_at && <><span>·</span><span>Finished: {formatDate(d.finished_at)}</span></>}
             </div>
+            {d.project && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Project: {d.project.path} · {d.project.files_included} files · {d.project.truncated ? "truncated" : "complete"}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={() => qc.invalidateQueries({ queryKey: ["run", id] })}>
@@ -99,7 +105,7 @@ export function RunPage() {
             {d.status === "done" && spec.data?.content && (
               <Button size="sm" onClick={() => accept.mutate()} disabled={accept.isPending}>
                 {accept.isPending ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
-                Принять как текущую
+                Принять
               </Button>
             )}
           </div>
@@ -107,26 +113,14 @@ export function RunPage() {
 
         {c && <ConsensusCard consensus={c} totalFindings={totalFindings} />}
 
-        <Tabs defaultValue="status">
+        <Tabs defaultValue={hasMultiDoc ? "docs" : "findings"}>
           <TabsList>
-            <TabsTrigger active>Агенты ({agentEntries.length})</TabsTrigger>
             <TabsTrigger>Findings ({totalFindings})</TabsTrigger>
             <TabsTrigger>Consensus</TabsTrigger>
-            <TabsTrigger>Updated Spec</TabsTrigger>
+            {hasMultiDoc ? <TabsTrigger>Documents</TabsTrigger> : <TabsTrigger>Spec</TabsTrigger>}
             <TabsTrigger>Changes</TabsTrigger>
-            <TabsTrigger>Round Log</TabsTrigger>
+            <TabsTrigger>Log</TabsTrigger>
           </TabsList>
-
-          <TabsContent>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {agentEntries.map((a) => {
-                const Icon = AGENT_ICON[a.key] || Sparkles;
-                return (
-                  <AgentCard key={a.key} agent={a.key} state={a} icon={Icon} runId={id} currentRound={d.current_round} />
-                );
-              })}
-            </div>
-          </TabsContent>
 
           <TabsContent>
             {findings.isLoading ? (
@@ -145,12 +139,20 @@ export function RunPage() {
           </TabsContent>
 
           <TabsContent>
-            {spec.isLoading ? (
-              <Skeleton className="h-96" />
-            ) : spec.data?.content ? (
-              <UpdatedSpecPanel content={spec.data.content} />
+            {hasMultiDoc ? (
+              updatedDocs.isLoading ? (
+                <Skeleton className="h-96" />
+              ) : updatedDocs.data ? (
+                <MultiDocPanel docs={updatedDocs.data.documents} />
+              ) : null
             ) : (
-              <EmptyState text="Writer не сгенерировал обновлённую спецификацию" />
+              spec.isLoading ? (
+                <Skeleton className="h-96" />
+              ) : spec.data?.content ? (
+                <UpdatedSpecPanel content={spec.data.content} />
+              ) : (
+                <EmptyState text="Writer не сгенерировал обновлённую спецификацию" />
+              )
             )}
           </TabsContent>
 
@@ -179,21 +181,6 @@ function CenterShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SubHeader() {
-  return (
-    <header className="border-b bg-background/60 backdrop-blur sticky top-0 z-10">
-      <div className="container h-12 flex items-center">
-        <Link to="/" className="text-sm font-semibold flex items-center gap-2">
-          <div className="h-5 w-5 rounded bg-primary text-primary-foreground flex items-center justify-center">
-            <Sparkles className="h-3 w-3" />
-          </div>
-          AI Senate
-        </Link>
-      </div>
-    </header>
-  );
-}
-
 function ConsensusCard({ consensus, totalFindings }: { consensus: import("@/lib/types").ConsensusResult; totalFindings: number }) {
   const variant: "default" | "destructive" | "warning" | "success" =
     ["blocked", "rejected", "failed"].includes(consensus.status) ? "destructive"
@@ -215,65 +202,6 @@ function ConsensusCard({ consensus, totalFindings }: { consensus: import("@/lib/
         </div>
       </AlertDescription>
     </Alert>
-  );
-}
-
-function AgentCard({
-  agent, state, icon: Icon, runId, currentRound,
-}: { agent: string; state: import("@/lib/types").AgentRunState; icon: React.ComponentType<{ className?: string }>; runId: string; currentRound: number; }) {
-  const tone =
-    state.status === "done" ? "text-emerald-500"
-    : state.status === "running" ? "text-blue-500"
-    : ["failed", "failed_parse", "timeout"].includes(state.status) ? "text-rose-500"
-    : "text-muted-foreground";
-  return (
-    <Card className="hover:shadow-md transition-shadow">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className={`p-1.5 rounded-md bg-muted ${tone}`}>
-              <Icon className="h-4 w-4" />
-            </div>
-            <div className="min-w-0">
-              <CardTitle className="text-sm font-medium truncate">{agent}</CardTitle>
-              <div className="text-[11px] text-muted-foreground">{state.parsed_output?.role || "—"}</div>
-            </div>
-          </div>
-          <Badge variant="outline" className={`text-[10px] uppercase tracking-wider ${tone}`}>
-            {state.status === "running" && <Spinner className="h-3 w-3" />}
-            {state.status}
-          </Badge>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {state.parsed_output ? (
-          <AgentSummary parsed={state.parsed_output} />
-        ) : (
-          <div className="text-xs text-muted-foreground">{state.error || "—"}</div>
-        )}
-        {state.duration_ms ? (
-          <div className="text-[11px] text-muted-foreground mt-2">{formatDuration(state.duration_ms)}</div>
-        ) : null}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AgentSummary({ parsed }: { parsed: import("@/lib/types").FindingAgentResponse }) {
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs">
-        <span className={`font-medium ${statusColor(parsed.decision)}`}>{parsed.decision}</span>
-        <span className="text-muted-foreground">conf {(parsed.confidence * 100).toFixed(0)}%</span>
-        <Badge variant="outline" className="text-[10px]">{parsed.items?.length || 0} items</Badge>
-      </div>
-      <p className="text-xs text-muted-foreground line-clamp-3">{parsed.summary}</p>
-      {parsed.required_actions?.length > 0 && (
-        <div className="text-[11px] text-muted-foreground">
-          {parsed.required_actions.length} required action(s)
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -378,20 +306,6 @@ function ConsensusDetail({ consensus }: { consensus: import("@/lib/types").Conse
           )}
         </CardContent>
       </Card>
-      <Card className="md:col-span-2">
-        <CardHeader><CardTitle className="text-sm">Unresolved questions ({consensus.unresolved_questions.length})</CardTitle></CardHeader>
-        <CardContent>
-          {consensus.unresolved_questions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Нет</p>
-          ) : (
-            <ul className="space-y-1.5 text-sm">
-              {consensus.unresolved_questions.map((q, i) => (
-                <li key={i} className="flex gap-2"><span className="text-muted-foreground">?</span><span>{q}</span></li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -416,6 +330,41 @@ function UpdatedSpecPanel({ content }: { content: string }) {
         <div className="prose prose-sm dark:prose-invert max-w-none rounded-lg border bg-card p-4 max-h-[70vh] overflow-y-auto">
           <ReactMarkdown>{content}</ReactMarkdown>
         </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MultiDocPanel({ docs }: { docs: Record<string, string> }) {
+  const filenames = Object.keys(docs);
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Updated documents ({filenames.length})</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {filenames.map((fname) => {
+          const download = () => {
+            const blob = new Blob([docs[fname]], { type: "text/markdown" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url; a.download = fname; a.click();
+            URL.revokeObjectURL(url);
+          };
+          return (
+            <div key={fname} className="space-y-2">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-medium">{fname}</h4>
+                <Button size="sm" variant="outline" onClick={download}>
+                  <Download className="h-3 w-3" /> {fname}
+                </Button>
+              </div>
+              <div className="prose prose-sm dark:prose-invert max-w-none rounded-lg border bg-card p-3 max-h-[40vh] overflow-y-auto">
+                <ReactMarkdown>{docs[fname]}</ReactMarkdown>
+              </div>
+            </div>
+          );
+        })}
       </CardContent>
     </Card>
   );

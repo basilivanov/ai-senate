@@ -33,6 +33,8 @@ def init_db():
         ("current_round", "INTEGER DEFAULT 1"),
         ("auto_stop_if_clean", "INTEGER DEFAULT 1"),
         ("phase", "TEXT DEFAULT 'queued'"),
+        ("profile", "TEXT DEFAULT 'full_council'"),
+        ("project_path", "TEXT"),
     ]
     for col_name, col_def in new_cols:
         try:
@@ -44,13 +46,13 @@ def init_db():
     conn.close()
 
 
-def create_run(run_id: str, new_document: bool, max_rounds: int = 2, auto_stop_if_clean: bool = True) -> Dict[str, Any]:
+def create_run(run_id: str, new_document: bool, max_rounds: int = 2, auto_stop_if_clean: bool = True, profile: str = "full_council", project_path: Optional[str] = None) -> Dict[str, Any]:
     now = datetime.now().isoformat()
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO runs (id, status, created_at, updated_at, new_document, max_rounds, current_round, auto_stop_if_clean, phase) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (run_id, "queued", now, now, 1 if new_document else 0, max_rounds, 1, 1 if auto_stop_if_clean else 0, "queued"),
+        "INSERT INTO runs (id, status, created_at, updated_at, new_document, max_rounds, current_round, auto_stop_if_clean, phase, profile, project_path) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (run_id, "queued", now, now, 1 if new_document else 0, max_rounds, 1, 1 if auto_stop_if_clean else 0, "queued", profile, project_path),
     )
     conn.commit()
     conn.close()
@@ -64,6 +66,8 @@ def create_run(run_id: str, new_document: bool, max_rounds: int = 2, auto_stop_i
         "current_round": 1,
         "auto_stop_if_clean": auto_stop_if_clean,
         "phase": "queued",
+        "profile": profile,
+        "project_path": project_path,
     }
 
 
@@ -122,6 +126,8 @@ def get_run(run_id: str) -> Optional[Dict[str, Any]]:
             "current_round": row["current_round"] if "current_round" in keys else 1,
             "auto_stop_if_clean": bool(row["auto_stop_if_clean"]) if "auto_stop_if_clean" in keys else True,
             "phase": row["phase"] if "phase" in keys else "queued",
+            "profile": row["profile"] if "profile" in keys else "full_council",
+            "project_path": row["project_path"] if "project_path" in keys else None,
         }
     return None
 
@@ -144,6 +150,8 @@ def list_runs() -> List[Dict[str, Any]]:
             "current_round": row["current_round"] if "current_round" in row.keys() else 1,
             "auto_stop_if_clean": bool(row["auto_stop_if_clean"]) if "auto_stop_if_clean" in row.keys() else True,
             "phase": row["phase"] if "phase" in row.keys() else "queued",
+            "profile": row["profile"] if "profile" in row.keys() else "full_council",
+            "project_path": row["project_path"] if "project_path" in row.keys() else None,
         }
         for row in rows
     ]
