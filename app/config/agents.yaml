@@ -8,43 +8,81 @@ defaults:
   save_raw_output: true
   save_prompt: true
 
-# Perspectives: each one is a single reviewer with a focused role.
-# The "name" maps to a .md file in .opencode/agents/<name>.md which is loaded
-# as the system prompt for the opencode "plan" subagent.
+# Perspectives: each one = one reviewer with a focused role + one opencode model.
+# The "key" also maps to .opencode/agents/<key>.md (system prompt) and to the
+# .md file in .opencode/agents/ loaded by OpencodeAgentAdapter.
 perspectives:
-  architect:
+  # ===== 4 active perspectives, each backed by an opencode-go model =====
+
+  glm51:
+    enabled: true
+    role: "Critical Reviewer — edge cases, contradictions, hidden assumptions"
+    provider: "opencode-go"
+    model: "glm-5.1"
+    timeout_sec: 240
+
+  qwen37max:
+    enabled: true
+    role: "Coder — реализуемость, алгоритмы, читаемость, тесты"
+    provider: "opencode-go"
+    model: "qwen3.7-max"
+    timeout_sec: 240
+
+  minimax:
     enabled: true
     role: "Architect — границы, контракты, эволюция системы"
+    provider: "opencode-go"
+    model: "minimax-m3"
+    timeout_sec: 240
+
+  deepseekv4pro:
+    enabled: true
+    role: "DBA — модель данных, схема, миграции, перформанс"
+    provider: "opencode-go"
+    model: "deepseek-v4-pro"
+    timeout_sec: 240
+
+  # ===== legacy perspectives (kept disabled, available on demand) =====
+
+  architect:
+    enabled: false
+    role: "Architect — границы, контракты, эволюция системы"
+    provider: "cliproxy"
     model: "claude-sonnet-4-6"
     timeout_sec: 240
 
   dba:
-    enabled: true
+    enabled: false
     role: "DBA — модель данных, схема, миграции, перформанс"
+    provider: "cliproxy"
     model: "claude-sonnet-4-6"
     timeout_sec: 240
 
   coder:
-    enabled: true
+    enabled: false
     role: "Разработчик — реализуемость, алгоритмы, читаемость, тесты"
+    provider: "cliproxy"
     model: "claude-sonnet-4-6"
     timeout_sec: 240
 
   security:
-    enabled: true
+    enabled: false
     role: "Security — модель угроз, аутентификация, защита данных, compliance"
+    provider: "cliproxy"
     model: "claude-sonnet-4-6"
     timeout_sec: 240
 
   critical:
-    enabled: true
+    enabled: false
     role: "Критик — противоречия, двусмысленности, скрытые допущения, edge cases"
+    provider: "cliproxy"
     model: "claude-sonnet-4-6"
     timeout_sec: 240
 
   synthesizer:
-    enabled: true
+    enabled: false
     role: "Синтезатор — объединение выводов Совета, приоритезация, план"
+    provider: "cliproxy"
     model: "claude-opus-4-6-thinking"
     timeout_sec: 300
 
@@ -52,6 +90,7 @@ perspectives:
 writer:
   enabled: true
   role: "Writer — обновление спецификации по выводам Совета"
+  provider: "cliproxy"
   model: "claude-opus-4-6-thinking"
   timeout_sec: 600
 
@@ -59,10 +98,9 @@ writer:
 # The default jury is used for round 1, 2, 3 (independent review / cross-review / final check).
 juries:
   default:
-    - architect
-    - dba
-    - coder
-    - security
-    - critical
+    - glm51
+    - qwen37max
+    - minimax
+    - deepseekv4pro
   synthesis:
     - synthesizer

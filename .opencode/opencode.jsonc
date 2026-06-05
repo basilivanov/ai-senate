@@ -14,36 +14,37 @@
         "gpt-5.4": {},
         "gpt-5.4-mini": {}
       }
+    },
+    "opencode-go": {
+      "name": "OpenCode Go",
+      "npm": "@ai-sdk/openai-compatible",
+      "options": {
+        "baseURL": "https://opencode.gocode.ai/v1"
+      },
+      "models": {
+        "glm-5.1": {},
+        "qwen3.7-max": {},
+        "minimax-m3": {},
+        "deepseek-v4-pro": {}
+      }
     }
   },
   "agent": {
-    "architect": {
-      "model": "cliproxy/claude-sonnet-4-6",
-      "prompt": "{file:./agents/architect.md}"
+    "glm51": {
+      "model": "opencode-go/glm-5.1",
+      "prompt": "{file:./agents/glm51.md}"
     },
-    "dba": {
-      "model": "cliproxy/claude-sonnet-4-6",
-      "prompt": "{file:./agents/dba.md}"
+    "qwen37max": {
+      "model": "opencode-go/qwen3.7-max",
+      "prompt": "{file:./agents/qwen37max.md}"
     },
-    "coder": {
-      "model": "cliproxy/claude-sonnet-4-6",
-      "prompt": "{file:./agents/coder.md}"
+    "minimax": {
+      "model": "opencode-go/minimax-m3",
+      "prompt": "{file:./agents/minimax.md}"
     },
-    "security": {
-      "model": "cliproxy/claude-sonnet-4-6",
-      "prompt": "{file:./agents/security.md}"
-    },
-    "critical": {
-      "model": "cliproxy/claude-sonnet-4-6",
-      "prompt": "{file:./agents/critical.md}"
-    },
-    "synthesizer": {
-      "model": "cliproxy/claude-opus-4-6-thinking",
-      "prompt": "{file:./agents/synthesizer.md}"
-    },
-    "writer": {
-      "model": "cliproxy/claude-opus-4-6-thinking",
-      "prompt": "Ты — технический писатель. Твоя задача — обновить ТЗ на основе выводов Совета. Верни валидный JSON по схеме writer_response_v1."
+    "deepseekv4pro": {
+      "model": "opencode-go/deepseek-v4-pro",
+      "prompt": "{file:./agents/deepseekv4pro.md}"
     },
     "plan": {
       "model": "cliproxy/claude-sonnet-4-6",
