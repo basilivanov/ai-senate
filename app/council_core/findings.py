@@ -35,6 +35,7 @@ def aggregate_findings(agent_runs: Dict[str, Dict[str, Any]]) -> Dict[str, List[
                     "id": item.get("id", f"{agent_name}-item"),
                     "agent": agent_name,
                     "role": run_info.get("role", "reviewer"),
+                    "type": ftype,
                     "category": item.get("category", "general"),
                     "severity": item.get("severity", "medium"),
                     "title": item.get("title", "Без названия"),
