@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.antigravitycli/
+data/runs/
+data/*.db
+*.log
+.env
+.venv/
+venv/
+.idea/
+.vscode/

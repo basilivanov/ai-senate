@@ -1,0 +1,16 @@
+thresholds:
+  failed_agents_ratio: 0.5
+  many_questions_count: 3
+  accept_vote_ratio: 0.5
+
+rules:
+  blocker_status: blocked
+  failed_majority_status: needs_followup
+  many_questions_status: needs_followup
+  major_risk_status: accepted_with_changes
+  default_uncertain_status: needs_human_decision
+
+rounds:
+  default_max_rounds: 2
+  max_allowed_rounds: 3
+  auto_stop_if_clean: true

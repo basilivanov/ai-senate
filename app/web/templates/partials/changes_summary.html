@@ -1,0 +1,57 @@
+<h2 style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem; margin-bottom: 0.5rem; margin-top: 0;">
+    Changes Summary
+</h2>
+
+{% if changes %}
+<div style="font-size: 0.8rem; line-height: 1.4; color: var(--text-primary);">
+    {% if changes.added %}
+    <div style="margin-bottom: 0.5rem;">
+        <strong style="color: #047857; font-size: 0.75rem; text-transform: uppercase; display: block; margin-bottom: 0.15rem; letter-spacing: 0.05em;">Добавлено (Added):</strong>
+        <ul style="padding-left: 1rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.1rem;">
+            {% for item in changes.added %}
+                <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if changes.changed %}
+    <div style="margin-bottom: 0.5rem;">
+        <strong style="color: #1d4ed8; font-size: 0.75rem; text-transform: uppercase; display: block; margin-bottom: 0.15rem; letter-spacing: 0.05em;">Изменено (Changed):</strong>
+        <ul style="padding-left: 1rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.1rem;">
+            {% for item in changes.changed %}
+                <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if changes.removed %}
+    <div style="margin-bottom: 0.5rem;">
+        <strong style="color: #b91c1c; font-size: 0.75rem; text-transform: uppercase; display: block; margin-bottom: 0.15rem; letter-spacing: 0.05em;">Удалено (Removed):</strong>
+        <ul style="padding-left: 1rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.1rem;">
+            {% for item in changes.removed %}
+                <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if changes.kept_unresolved %}
+    <div style="margin-bottom: 0.5rem;">
+        <strong style="color: #d97706; font-size: 0.75rem; text-transform: uppercase; display: block; margin-bottom: 0.15rem; letter-spacing: 0.05em;">Сохранено нерешённым (Kept Unresolved):</strong>
+        <ul style="padding-left: 1rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 0.1rem;">
+            {% for item in changes.kept_unresolved %}
+                <li>{{ item }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+    
+    {% if not changes.added and not changes.changed and not changes.removed and not changes.kept_unresolved %}
+    <p class="placeholder-text">Изменений в документе не зафиксировано.</p>
+    {% endif %}
+</div>
+{% else %}
+<p class="placeholder-text">Ожидание результатов...</p>
+{% endif %}

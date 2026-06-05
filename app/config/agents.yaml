@@ -1,0 +1,53 @@
+defaults:
+  timeout_sec: 120
+  max_retries: 1
+  effort: "max"
+  temperature: 0.2
+  require_json_output: true
+  save_raw_output: true
+  save_prompt: true
+
+agents:
+  codex:
+    enabled: true
+    type: cli
+    provider: codex
+    role: implementation_reviewer
+    command:
+      binary: "codexa"
+      args: ["--xhigh"]
+    working_dir: "/opt/ai-lab/ai-senate"
+    timeout_sec: 120
+
+  agy:
+    enabled: true
+    type: api
+    provider: openai_compatible
+    role: critical_reviewer
+    base_url: "http://127.0.0.1:18317/v1"
+    api_key_env: "AGY_PROXY_API_KEY"
+    model: "gemini-3.1-pro-preview"
+    temperature: 0.2
+    timeout_sec: 120
+
+  opus:
+    enabled: true
+    type: cli
+    provider: agya
+    role: architectural_reviewer
+    command:
+      binary: "agya"
+      args: ["exec", "--model", "claude-opus-4-6-thinking"]
+    working_dir: "/opt/ai-lab/ai-senate"
+    timeout_sec: 180
+
+  writer:
+    enabled: true
+    type: api
+    provider: openai_compatible
+    role: synthesizer
+    base_url: "http://127.0.0.1:18317/v1"
+    api_key_env: "AGY_PROXY_API_KEY"
+    model: "gemini-3.1-pro-preview"
+    temperature: 0.2
+    timeout_sec: 180

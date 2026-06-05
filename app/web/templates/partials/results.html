@@ -1,0 +1,359 @@
+<!-- RESULTS WRAPPER WITH PRECISE 3-SECTION ORDER FROM PRD -->
+<div class="animate-fade-in" id="results-wrapper" style="display: flex; flex-direction: column; gap: 2.5rem; margin-top: 2rem;">
+    
+    <!-- ==================== SECTION 1: FINDINGS (Раздел 10 ТЗ) ==================== -->
+    <div class="glass-panel" id="findings-container" style="border-color: rgba(99, 102, 241, 0.25);">
+        <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 4px; height: 24px; background: var(--accent-primary); border-radius: 2px;"></div>
+            <h3 style="font-size: 1.4rem; font-weight: 700; color: var(--text-primary);">
+                Замечания и Риски (Findings)
+            </h3>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+            <!-- BLOCKERS -->
+            {% if findings.blockers %}
+            <div class="findings-group group-blocker">
+                <div class="findings-group-title">Blockers (Блокирующие)</div>
+                {% for f in findings.blockers %}
+                    <div class="finding-card">
+                        <div class="finding-card-header">
+                            <span class="finding-card-title">⚠️ {{ f.title }}</span>
+                            <span class="finding-card-agent">{{ f.agent }} ({{ f.role }})</span>
+                        </div>
+                        <p class="finding-card-desc">{{ f.description }}</p>
+                        {% if f.evidence %}<p class="finding-card-meta"><strong>Аргумент:</strong> {{ f.evidence }}</p>{% endif %}
+                        {% if f.recommendation %}<p class="finding-card-meta" style="color: #34d399; background: rgba(52, 211, 153, 0.05);"><strong>Рекомендация:</strong> {{ f.recommendation }}</p>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- MAJOR RISKS -->
+            {% if findings.major_risks %}
+            <div class="findings-group group-major">
+                <div class="findings-group-title">Major Risks (Критические риски)</div>
+                {% for f in findings.major_risks %}
+                    <div class="finding-card">
+                        <div class="finding-card-header">
+                            <span class="finding-card-title">🔥 {{ f.title }}</span>
+                            <span class="finding-card-agent">{{ f.agent }}</span>
+                        </div>
+                        <p class="finding-card-desc">{{ f.description }}</p>
+                        {% if f.evidence %}<p class="finding-card-meta"><strong>Аргумент:</strong> {{ f.evidence }}</p>{% endif %}
+                        {% if f.recommendation %}<p class="finding-card-meta" style="color: #fbbf24; background: rgba(251, 191, 36, 0.05);"><strong>Рекомендация:</strong> {{ f.recommendation }}</p>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- RISKS -->
+            {% if findings.risks %}
+            <div class="findings-group group-risk">
+                <div class="findings-group-title">Risks (Риски)</div>
+                {% for f in findings.risks %}
+                    <div class="finding-card">
+                        <div class="finding-card-header">
+                            <span class="finding-card-title">⚡ {{ f.title }}</span>
+                            <span class="finding-card-agent">{{ f.agent }}</span>
+                        </div>
+                        <p class="finding-card-desc">{{ f.description }}</p>
+                        {% if f.evidence %}<p class="finding-card-meta"><strong>Аргумент:</strong> {{ f.evidence }}</p>{% endif %}
+                        {% if f.recommendation %}<p class="finding-card-meta"><strong>Рекомендация:</strong> {{ f.recommendation }}</p>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- SUGGESTIONS -->
+            {% if findings.suggestions %}
+            <div class="findings-group group-suggestion">
+                <div class="findings-group-title">Suggestions (Предложения)</div>
+                {% for f in findings.suggestions %}
+                    <div class="finding-card">
+                        <div class="finding-card-header">
+                            <span class="finding-card-title">💡 {{ f.title }}</span>
+                            <span class="finding-card-agent">{{ f.agent }}</span>
+                        </div>
+                        <p class="finding-card-desc">{{ f.description }}</p>
+                        {% if f.recommendation %}<p class="finding-card-meta" style="color: #60a5fa; background: rgba(96, 165, 250, 0.05);"><strong>Рекомендация:</strong> {{ f.recommendation }}</p>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <!-- QUESTIONS -->
+            {% if findings.questions %}
+            <div class="findings-group group-question">
+                <div class="findings-group-title">Questions (Вопросы)</div>
+                {% for f in findings.questions %}
+                    <div class="finding-card">
+                        <div class="finding-card-header">
+                            <span class="finding-card-title">❓ {{ f.title }}</span>
+                            <span class="finding-card-agent">{{ f.agent }}</span>
+                        </div>
+                        <p class="finding-card-desc">{{ f.description }}</p>
+                        {% if f.recommendation %}<p class="finding-card-meta"><strong>Рекомендация:</strong> {{ f.recommendation }}</p>{% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% if not findings.blockers and not findings.major_risks and not findings.risks and not findings.suggestions and not findings.questions %}
+            <div style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">
+                Замечаний не обнаружено. Спецификация выглядит чисто!
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ==================== SECTION 2: CONSENSUS SUMMARY (Раздел 11 ТЗ) ==================== -->
+    <div class="glass-panel" id="consensus-container" style="border-color: rgba(99, 102, 241, 0.25);">
+        <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 4px; height: 24px; background: #10b981; border-radius: 2px;"></div>
+            <h3 style="font-size: 1.4rem; font-weight: 700; color: var(--text-primary);">
+                Согласование и Консенсус (Consensus Summary)
+            </h3>
+        </div>
+        
+        {% if consensus %}
+        <div class="consensus-card consensus-{{ consensus.status }}">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.75rem;">
+                <span style="font-size: 0.85rem; font-weight: 600; text-transform: uppercase; color: var(--text-secondary); letter-spacing: 0.05em;">
+                    Статус согласования:
+                </span>
+                <span class="decision-badge badge-{{ consensus.status }}">
+                    {% if consensus.status == "accepted" %}
+                        Согласовано / Accepted
+                    {% elif consensus.status == "accepted_with_changes" %}
+                        Согласовано с изменениями / Accepted with changes
+                    {% elif consensus.status == "needs_followup" %}
+                        Уточнение вопросов / Needs follow-up
+                    {% elif consensus.status == "needs_human_decision" %}
+                        Ручной выбор / Needs human decision
+                    {% elif consensus.status == "blocked" %}
+                        Заблокировано / Blocked
+                    {% else %}
+                        {{ consensus.status }}
+                    {% endif %}
+                </span>
+            </div>
+            
+            <p style="font-size: 1.1rem; font-weight: 500; line-height: 1.5; color: #f3f4f6; margin-bottom: 1.25rem;">
+                {{ consensus.summary }}
+            </p>
+
+            {% if consensus.required_actions %}
+            <div style="margin-top: 1rem; background: rgba(0,0,0,0.15); padding: 1rem; border-radius: 8px;">
+                <span style="display: block; font-size: 0.8rem; text-transform: uppercase; color: var(--accent-primary); font-weight: 700; margin-bottom: 0.5rem; letter-spacing: 0.05em;">
+                    Рекомендованные Правки:
+                </span>
+                <ul style="padding-left: 1.25rem; font-size: 0.9rem; color: #d1d5db; display: flex; flex-direction: column; gap: 0.25rem;">
+                    {% for action in consensus.required_actions %}
+                        <li>{{ action }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div style="text-align: center; color: var(--text-secondary); padding: 1.5rem 0;">
+            Консенсус-отчет отсутствует.
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ==================== SECTION 3: UPDATED SPEC (Раздел 12 ТЗ) ==================== -->
+    <div class="glass-panel" id="updated-spec-container" style="border-color: rgba(99, 102, 241, 0.25);">
+        <div style="border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 1rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.75rem;">
+            <div style="width: 4px; height: 24px; background: #60a5fa; border-radius: 2px;"></div>
+            <h3 style="font-size: 1.4rem; font-weight: 700; color: var(--text-primary);">
+                Обновлённая Спецификация (Updated Spec)
+            </h3>
+        </div>
+        
+        {% if updated_spec %}
+        <div style="position: relative;">
+            <textarea readonly id="updated_spec_text" style="min-height: 450px; background: rgba(9,13,22,0.85); border-color: rgba(99,102,241,0.25); font-size: 0.85rem;" class="animate-fade-in">{{ updated_spec }}</textarea>
+            
+            <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 1rem;">
+                <button class="btn-action" onclick="copySpec()">
+                    ✂ Копировать ТЗ
+                </button>
+                <button class="btn-action" onclick="downloadSpec()">
+                    💾 Скачать markdown
+                </button>
+                
+                <!-- ACCEPT SPEC BUTTON -->
+                <button class="btn-action" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); font-weight: 600; margin-left: auto;"
+                        hx-post="/runs/{{ run_id }}/accept"
+                        hx-target="#accept-banner-container"
+                        hx-swap="innerHTML">
+                    ✓ Принять как текущий ТЗ (spec.md)
+                </button>
+            </div>
+        </div>
+
+        <!-- TARGET CONTAINER FOR SUCCESS BANNER -->
+        <div id="accept-banner-container" class="animate-fade-in" style="margin-top: 1rem;"></div>
+        {% else %}
+        <div style="text-align: center; color: var(--text-secondary); padding: 2rem 0;">
+            Синтезированное ТЗ отсутствует или еще не сформировано.
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style>
+    /* Premium style definitions for findings and consensus panels */
+    .consensus-card {
+        border-radius: 10px;
+        padding: 1.25rem 1.5rem;
+        border: 1px solid rgba(255,255,255,0.03);
+    }
+    
+    .consensus-accepted { background: rgba(16, 185, 129, 0.04); border-color: rgba(16, 185, 129, 0.2); }
+    .consensus-accepted_with_changes { background: rgba(59, 130, 246, 0.04); border-color: rgba(59, 130, 246, 0.2); }
+    .consensus-needs_followup { background: rgba(245, 158, 11, 0.04); border-color: rgba(245, 158, 11, 0.2); }
+    .consensus-needs_human_decision { background: rgba(139, 92, 246, 0.04); border-color: rgba(139, 92, 246, 0.2); }
+    .consensus-blocked { background: rgba(239, 68, 68, 0.04); border-color: rgba(239, 68, 68, 0.2); }
+
+    .decision-badge {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.25rem 0.6rem;
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+    .badge-accepted { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .badge-accepted_with_changes { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+    .badge-needs_followup { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+    .badge-needs_human_decision { background: rgba(139, 92, 246, 0.15); color: #c084fc; }
+    .badge-blocked { background: rgba(239, 68, 68, 0.15); color: #f87171; }
+
+    .findings-group {
+        border: 1px solid rgba(255,255,255,0.03);
+        border-radius: 10px;
+        padding: 1.25rem;
+        background: rgba(255,255,255,0.01);
+    }
+
+    .findings-group-title {
+        font-weight: 700;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .group-blocker { border-color: rgba(239, 68, 68, 0.25); }
+    .group-blocker .findings-group-title { color: #f87171; }
+
+    .group-major { border-color: rgba(245, 158, 11, 0.25); }
+    .group-major .findings-group-title { color: #fbbf24; }
+
+    .group-risk { border-color: rgba(234, 179, 8, 0.15); }
+    .group-risk .findings-group-title { color: #facc15; }
+
+    .group-suggestion { border-color: rgba(59, 130, 246, 0.15); }
+    .group-suggestion .findings-group-title { color: #60a5fa; }
+
+    .group-question { border-color: rgba(139, 92, 246, 0.15); }
+    .group-question .findings-group-title { color: #c084fc; }
+
+    .finding-card {
+        background: rgba(9, 13, 22, 0.4);
+        border: 1px solid rgba(255,255,255,0.02);
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .finding-card:last-child { margin-bottom: 0; }
+
+    .finding-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .finding-card-title {
+        font-weight: 600;
+        color: #f3f4f6;
+        font-size: 0.95rem;
+    }
+
+    .finding-card-agent {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-family: monospace;
+    }
+
+    .finding-card-desc {
+        font-size: 0.9rem;
+        color: #d1d5db;
+        margin-bottom: 0.5rem;
+    }
+
+    .finding-card-meta {
+        font-size: 0.8rem;
+        color: #9ca3af;
+        background: rgba(255,255,255,0.02);
+        padding: 0.4rem 0.6rem;
+        border-radius: 4px;
+        margin-top: 0.4rem;
+    }
+
+    .btn-action {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 8px;
+        color: var(--text-primary);
+        padding: 0.6rem 1.2rem;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: var(--transition-smooth);
+    }
+
+    .btn-action:hover {
+        background: rgba(255,255,255,0.07);
+        border-color: rgba(255,255,255,0.15);
+        transform: translateY(-1px);
+    }
+
+    .alert {
+        padding: 1rem 1.25rem;
+        border-radius: 8px;
+        margin-top: 1rem;
+    }
+
+    .alert-success {
+        background: rgba(16, 185, 129, 0.1);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        color: #34d399;
+    }
+</style>
+
+<script>
+    function copySpec() {
+        const specText = document.getElementById('updated_spec_text');
+        specText.select();
+        specText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(specText.value);
+        alert("✓ Текст ТЗ скопирован в буфер обмена!");
+    }
+
+    function downloadSpec() {
+        const text = document.getElementById('updated_spec_text').value;
+        const blob = new Blob([text], { type: 'text/markdown' });
+        const anchor = document.createElement('a');
+        anchor.download = 'updated-spec.md';
+        anchor.href = window.URL.createObjectURL(blob);
+        anchor.click();
+        window.URL.revokeObjectURL(anchor.href);
+    }
+</script>
