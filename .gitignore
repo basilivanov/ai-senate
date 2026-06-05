@@ -1,13 +1,40 @@
+# Python
 __pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-.antigravitycli/
-data/runs/
-data/*.db
-*.log
-.env
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
 .venv/
 venv/
+.pytest_cache/
+*.pyc
+*.pyo
+
+# Runtime data (regenerated on every run)
+data/runs/
+data/*.db
+data/council.db
+data/test_council.db
+data/spec.md
+
+# Editor / OS
 .idea/
 .vscode/
+.DS_Store
+*.swp
+
+# Node / Vite
+node_modules/
+dist/
+.vite/
+*.local
+
+# Opencode runtime caches
+.antigravitycli/
+.opencode/sessions/
+.opencode/cache/
+
+# Logs
+*.log
+.env
