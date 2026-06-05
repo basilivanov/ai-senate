@@ -43,11 +43,18 @@ perspectives:
   # ===== 4 active perspectives, each backed by an opencode-go model =====
 
   glm51:
-    enabled: true
+    enabled: false
     role: "Critical Reviewer — edge cases, contradictions, hidden assumptions"
     provider: "opencode-go"
     model: "glm-5.1"
     timeout_sec: 360
+
+  minimax27:
+    enabled: true
+    role: "Critical Reviewer — edge cases, contradictions, hidden assumptions"
+    provider: "opencode-go"
+    model: "minimax-m3"
+    timeout_sec: 240
 
   kimi26:
     enabled: true
@@ -126,12 +133,12 @@ writer:
 # The default jury is used for round 1, 2, 3 (independent review / cross-review / final check).
 juries:
   default:
-    - glm51
+    - minimax27
     - kimi26
     - minimax
     - deepseekv4pro
   lite:
-    - glm51
+    - minimax27
     - kimi26
   synthesis:
     - synthesizer

@@ -21,6 +21,10 @@
       "model": "opencode-go/glm-5.1",
       "prompt": "{file:./agents/glm51.md}"
     },
+    "minimax27": {
+      "model": "opencode-go/minimax-m3",
+      "prompt": "{file:./agents/minimax27.md}"
+    },
     "kimi26": {
       "model": "opencode-go/kimi-k2.6",
       "prompt": "{file:./agents/kimi26.md}"

@@ -14,7 +14,7 @@ const AGENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = 
   critical: Bug,
   synthesizer: Brain,
   writer: Sparkles,
-  glm51: Bug,
+  minimax27: Bug,
   kimi26: Code,
   minimax: Shield,
   deepseekv4pro: Database,
