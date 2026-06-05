@@ -167,6 +167,7 @@ class OpencodeAgentAdapter:
         documents = workspace.get("documents", []) or []
         project = workspace.get("project")
         git_diff = workspace.get("git_diff")
+        pr = workspace.get("pr")
 
         instructions = contract.get("instructions", {}) or {}
         focus = instructions.get("focus", []) or []
@@ -212,6 +213,16 @@ class OpencodeAgentAdapter:
                 parts.append("\n[Diff was truncated due to line limit]")
             parts.append("=== END GIT DIFF ===")
             parts.append("Review these changes against the specification and codebase.")
+
+        # PR context
+        if pr:
+            parts.append(f"\n=== GITHUB PR #{pr.get('number', '?')}: {pr.get('title', '')} ===")
+            parts.append(f"Repository: {pr.get('owner', '')}/{pr.get('repo', '')}")
+            parts.append(f"Branch: {pr.get('head_branch', '')} → {pr.get('base_branch', '')}")
+            parts.append(f"Author: {pr.get('author', '')}")
+            parts.append(f"URL: {pr.get('url', '')}")
+            parts.append("=== END PR ===")
+            parts.append("Review these changes as a pull request. Focus on: correctness, edge cases, security, performance.")
 
         # Instructions
         parts.append(f"\n--- INSTRUCTIONS ---")

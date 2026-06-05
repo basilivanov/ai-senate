@@ -12,9 +12,10 @@ from pydantic import BaseModel
 
 from app.runs import storage, service
 from app.opencode import get_client
-from app.council_core.contracts import AgentResponseContract, ConsensusResultContract
+from app.council_core.contracts import AgentResponseContract, ConsensusResultContract, PRContext
 from app.council_core.project_digest import build_project_digest, validate_project_path
 from app.council_core.git_context import get_git_diff
+from app.council_core.github_pr import parse_pr_url, fetch_pr_context, fetch_pr_diff, pr_to_documents, post_pr_comment
 
 
 log = logging.getLogger("ai_senate.api")
@@ -62,8 +63,19 @@ class CreateRunBody(BaseModel):
     profile: str = "full_council"
     project: Optional[ProjectInput] = None
     git_diff: Optional[GitDiffInput] = None
+    pr_url: Optional[str] = None
+    post_comment: bool = False
     max_rounds: int = 2
     auto_stop_if_clean: bool = True
+
+
+class PRUrlBody(BaseModel):
+    pr_url: str
+
+
+class PostCommentBody(BaseModel):
+    pr_url: str
+    format: str = "markdown"
 
 
 class SpecBody(BaseModel):
@@ -209,6 +221,23 @@ async def project_git_diff(body: GitDiffInput):
     return result.model_dump()
 
 
+@router.post("/pr/preview")
+async def pr_preview(body: PRUrlBody):
+    try:
+        pr_ctx = fetch_pr_context(body.pr_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    try:
+        diff_ctx = fetch_pr_diff(body.pr_url)
+    except ValueError as e:
+        diff_ctx = None
+    result = pr_ctx.model_dump()
+    if diff_ctx:
+        result["diff"] = diff_ctx.model_dump(exclude={"diff_content"})
+        result["diff_content_length"] = len(diff_ctx.diff_content)
+    return result
+
+
 # ----------------------- Runs -----------------------
 
 @router.get("/runs")
@@ -249,6 +278,20 @@ async def create_run(body: CreateRunBody, background_tasks: BackgroundTasks):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    pr_ctx = None
+    if body.pr_url:
+        try:
+            pr_ctx = fetch_pr_context(body.pr_url)
+            if not git_diff_ctx:
+                git_diff_ctx = fetch_pr_diff(body.pr_url)
+            if not body.documents and not body.spec_text:
+                body.documents = [d.model_dump() for d in pr_to_documents(pr_ctx)]
+            body.spec_text = body.spec_text or pr_ctx.title
+            if not body.owner_input:
+                body.owner_input = f"GitHub PR: {pr_ctx.url}"
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     storage.create_run(
         run_id,
         body.new_document,
@@ -258,7 +301,7 @@ async def create_run(body: CreateRunBody, background_tasks: BackgroundTasks):
         project_path=body.project.path if body.project else None,
     )
 
-    docs = [d.model_dump() for d in body.documents] if body.documents else []
+    docs = [d.model_dump() for d in body.documents] if body.documents and isinstance(body.documents[0], DocumentInput) else body.documents
 
     background_tasks.add_task(
         service.run_council_task,
@@ -272,6 +315,9 @@ async def create_run(body: CreateRunBody, background_tasks: BackgroundTasks):
         documents=docs,
         project_context=project_ctx.model_dump() if project_ctx else None,
         git_diff_context=git_diff_ctx.model_dump() if git_diff_ctx else None,
+        pr_context=pr_ctx.model_dump() if pr_ctx else None,
+        post_comment=body.post_comment,
+        pr_url=body.pr_url,
     )
     return storage.get_run(run_id)
 
@@ -433,6 +479,44 @@ async def get_agent_artifact(run_id: str, round_num: int, agent: str):
     }
 
 
+def _build_review_comment(run_dir: str, run_data: dict) -> str:
+    findings = _read_json(os.path.join(run_dir, "findings.json"), [])
+    consensus = _read_json(os.path.join(run_dir, "consensus.json"), {})
+
+    lines = [
+        f"## AI Senate Review: `{run_data.get('run_id', '?')}`\n",
+        f"**Profile**: {run_data.get('profile', 'unknown')}",
+        f"**Decision**: {consensus.get('decision', '—')}",
+        f"**Confidence**: {consensus.get('confidence', '—')}",
+        f"**Summary**: {consensus.get('summary', '')}\n",
+    ]
+
+    if findings:
+        lines.append("### Findings\n")
+        lines.append("| # | Agent | Type | Severity | Title |")
+        lines.append("|---|-------|------|----------|-------|")
+        for i, f in enumerate(findings, 1):
+            agent = f.get("agent", "?")
+            ftype = f.get("type", "?")
+            sev = f.get("severity", "?")
+            title = f.get("title", "")
+            lines.append(f"| {i} | {agent} | {ftype} | {sev} | {title} |")
+
+    required = consensus.get("required_actions", [])
+    if required:
+        lines.append("\n### Required Actions")
+        for a in required:
+            lines.append(f"- {a}")
+
+    open_q = consensus.get("unresolved_questions", [])
+    if open_q:
+        lines.append("\n### Open Questions")
+        for q in open_q:
+            lines.append(f"- {q}")
+
+    return "\n".join(lines)
+
+
 @router.post("/runs/{run_id}/accept")
 async def accept_run(run_id: str):
     src = os.path.join(RUNS_DIR, run_id, "updated-spec.md")
@@ -442,3 +526,19 @@ async def accept_run(run_id: str):
     import shutil
     shutil.copy2(src, SPEC_FILE)
     return {"status": "accepted", "spec_file": SPEC_FILE}
+
+
+@router.post("/runs/{run_id}/post-comment")
+async def post_run_comment(run_id: str, body: PostCommentBody):
+    run_dir = os.path.join(RUNS_DIR, run_id)
+    run_data = _read_json(os.path.join(run_dir, "run.json"), None)
+    if not run_data or run_data.get("status") != "done":
+        raise HTTPException(status_code=400, detail="Run not done yet")
+
+    comment = _build_review_comment(run_dir, run_data)
+
+    try:
+        result = post_pr_comment(body.pr_url, comment)
+        return {"status": "posted", "pr_url": body.pr_url, "comment_preview": comment[:500]}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

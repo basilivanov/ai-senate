@@ -207,8 +207,38 @@ export interface CreateRunRequest {
   profile: string;
   project: ProjectInput | null;
   git_diff: GitDiffInput | null;
+  pr_url: string | null;
+  post_comment: boolean;
   max_rounds: number;
   auto_stop_if_clean: boolean;
+}
+
+export interface PRPreviewResponse {
+  url: string;
+  owner: string;
+  repo: string;
+  number: number;
+  title: string;
+  body: string;
+  head_branch: string;
+  base_branch: string;
+  author: string;
+  state: string;
+  diff?: {
+    diff_type: string;
+    files_changed: number;
+    insertions: number;
+    deletions: number;
+    truncated: boolean;
+    file_list: string[];
+  };
+  diff_content_length?: number;
+}
+
+export interface PostCommentResponse {
+  status: string;
+  pr_url: string;
+  comment_preview: string;
 }
 
 export interface ProjectDigestResponse {

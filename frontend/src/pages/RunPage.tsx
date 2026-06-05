@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, CheckCircle2, AlertTriangle, Info, AlertCircle, Shield, Bug, Database, Code, Brain, Sparkles, RefreshCw, Download } from "lucide-react";
+import { ArrowLeft, CheckCircle2, AlertTriangle, Info, AlertCircle, Shield, Bug, Database, Code, Brain, Sparkles, RefreshCw, Download, GitBranch } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -37,6 +38,14 @@ export function RunPage() {
   const accept = useMutation({
     mutationFn: () => api.acceptSpec(id),
     onSuccess: () => alert("Спецификация принята и сохранена в data/spec.md"),
+  });
+
+  const [prUrl, setPrUrl] = useState("");
+  const [postCommentResult, setPostCommentResult] = useState<string | null>(null);
+  const postComment = useMutation({
+    mutationFn: (url: string) => api.postComment(id, url),
+    onSuccess: (data) => setPostCommentResult(data.status),
+    onError: (e) => setPostCommentResult(`Error: ${e}`),
   });
 
   const agentEntries = useMemo(() => {
@@ -107,6 +116,21 @@ export function RunPage() {
                 {accept.isPending ? <Spinner /> : <CheckCircle2 className="h-4 w-4" />}
                 Принять
               </Button>
+            )}
+            {d.status === "done" && (
+              <div className="flex items-center gap-1">
+                <Input
+                  placeholder="PR URL"
+                  value={prUrl}
+                  onChange={(e) => { setPrUrl(e.target.value); setPostCommentResult(null); }}
+                  className="w-48 h-8 text-xs"
+                />
+                <Button size="sm" variant="outline" onClick={() => postComment.mutate(prUrl)} disabled={!prUrl.trim() || postComment.isPending}>
+                  {postComment.isPending ? <Spinner /> : <GitBranch className="h-3.5 w-3.5" />}
+                  Post to PR
+                </Button>
+                {postCommentResult && <span className="text-xs text-muted-foreground">{postCommentResult}</span>}
+              </div>
             )}
           </div>
         </div>

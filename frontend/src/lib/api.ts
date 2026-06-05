@@ -8,6 +8,8 @@ import type {
   GitDiffInput,
   GitDiffResponse,
   PerspectivesConfig,
+  PostCommentResponse,
+  PRPreviewResponse,
   ProjectDigestResponse,
   ProjectInput,
   RunDetail,
@@ -55,4 +57,8 @@ export const api = {
     http<ProjectDigestResponse>("/project/digest", { method: "POST", body: JSON.stringify(body) }),
   projectGitDiff: (body: GitDiffInput) =>
     http<GitDiffResponse>("/project/git-diff", { method: "POST", body: JSON.stringify(body) }),
+  prPreview: (prUrl: string) =>
+    http<PRPreviewResponse>("/pr/preview", { method: "POST", body: JSON.stringify({ pr_url: prUrl }) }),
+  postComment: (runId: string, prUrl: string) =>
+    http<PostCommentResponse>(`/runs/${runId}/post-comment`, { method: "POST", body: JSON.stringify({ pr_url: prUrl, format: "markdown" }) }),
 };

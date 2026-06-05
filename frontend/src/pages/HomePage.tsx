@@ -47,6 +47,12 @@ export function HomePage() {
   const [diffPreview, setDiffPreview] = useState<{ files: number; insertions: number; deletions: number } | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
 
+  // GitHub PR
+  const [prUrl, setPrUrl] = useState("");
+  const [postComment, setPostComment] = useState(false);
+  const [prPreview, setPrPreview] = useState<{ title: string; author: string; branch: string; files: number } | null>(null);
+  const [prLoading, setPrLoading] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
   const runs = useQuery({ queryKey: ["runs"], queryFn: () => api.listRuns(), refetchInterval: 5000 });
@@ -71,6 +77,8 @@ export function HomePage() {
         profile,
         project: includeProject && projectPath ? { path: projectPath, file_patterns: [], exclude_patterns: [], max_file_size_kb: 50, max_total_tokens: 15000 } : null,
         git_diff: includeGitDiff && projectPath ? { project_path: projectPath, diff_type: gitDiffType, max_lines: 2000 } : null,
+        pr_url: prUrl || null,
+        post_comment: postComment,
         max_rounds: isQuickReview ? 1 : maxRounds,
         auto_stop_if_clean: autoStop,
       };
@@ -310,6 +318,46 @@ export function HomePage() {
                       )}
                     </div>
                   )}
+
+                  {/* GitHub PR */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-medium">
+                      <GitBranch className="h-4 w-4" />
+                      GitHub Pull Request
+                    </label>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="https://github.com/owner/repo/pull/123"
+                        value={prUrl}
+                        onChange={(e) => { setPrUrl(e.target.value); setPrPreview(null); }}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={!prUrl.trim() || prLoading}
+                        onClick={async () => {
+                          setPrLoading(true);
+                          try {
+                            const res = await api.prPreview(prUrl.trim());
+                            setPrPreview({ title: res.title, author: res.author, branch: `${res.head_branch} → ${res.base_branch}`, files: res.diff?.files_changed || 0 });
+                          } catch (e) { setPrPreview(null); setError(String(e)); }
+                          finally { setPrLoading(false); }
+                        }}
+                      >
+                        {prLoading ? <Spinner /> : "Preview"}
+                      </Button>
+                    </div>
+                    {prPreview && (
+                      <div className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1">
+                        {prPreview.title} · {prPreview.author} · {prPreview.branch} · {prPreview.files} files changed
+                      </div>
+                    )}
+                    <label className="flex items-center gap-2 text-xs">
+                      <input type="checkbox" checked={postComment} onChange={(e) => setPostComment(e.target.checked)} className="h-4 w-4 rounded border-input" />
+                      Автоматически запостить комментарий в PR после ревью
+                    </label>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <label className="flex items-center gap-2 text-sm">

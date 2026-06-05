@@ -26,6 +26,19 @@ class GitDiffContext(BaseModel):
     file_list: List[str] = []
 
 
+class PRContext(BaseModel):
+    url: str
+    owner: str
+    repo: str
+    number: int
+    title: str = ""
+    body: str = ""
+    head_branch: str = ""
+    base_branch: str = ""
+    author: str = ""
+    state: str = ""
+
+
 class Workspace(BaseModel):
     root: str
     spec_file: str
@@ -33,6 +46,7 @@ class Workspace(BaseModel):
     documents: List[DocumentRef] = []
     project: Optional[ProjectContext] = None
     git_diff: Optional[GitDiffContext] = None
+    pr: Optional[PRContext] = None
 
 class Instructions(BaseModel):
     language: str = "ru"

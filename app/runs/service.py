@@ -11,7 +11,7 @@ from app.council_core import consensus, findings, writer as writer_module
 from app.agent_adapters import OpencodeAgentAdapter
 from app.council_core.contracts import (
     AgentRequestContract, Workspace, Instructions,
-    DocumentRef, ProjectContext, GitDiffContext,
+    DocumentRef, ProjectContext, GitDiffContext, PRContext,
 )
 
 
@@ -150,6 +150,9 @@ async def run_council_task(
     documents: Optional[List[Dict[str, str]]] = None,
     project_context: Optional[Dict[str, Any]] = None,
     git_diff_context: Optional[Dict[str, Any]] = None,
+    pr_context: Optional[Dict[str, Any]] = None,
+    post_comment: bool = False,
+    pr_url: Optional[str] = None,
 ):
     yaml_cfg = _load_agent_config()
     profile_cfg = _get_profile(yaml_cfg, profile)
@@ -208,6 +211,8 @@ async def run_council_task(
         workspace_kwargs["project"] = project_ctx
     if git_diff_ctx:
         workspace_kwargs["git_diff"] = git_diff_ctx
+    if pr_context:
+        workspace_kwargs["pr"] = PRContext(**pr_context) if isinstance(pr_context, dict) else pr_context
 
     run_data = {
         "run_id": run_id,
@@ -498,7 +503,20 @@ async def run_council_task(
     run_data = read_run_file(run_id)
     run_data["status"] = "done"
     run_data["finished_at"] = datetime.now().isoformat()
+    if pr_context:
+        run_data["pr_context"] = pr_context
     update_run_file(run_id, run_data)
+
+    if post_comment and pr_url:
+        try:
+            from app.council_core.github_pr import post_pr_comment as _post_comment
+            from app.web.api import _build_review_comment
+            comment = _build_review_comment(run_dir, run_data)
+            _post_comment(pr_url, comment)
+            run_data["comment_posted"] = True
+            update_run_file(run_id, run_data)
+        except Exception as e:
+            log.warning("Failed to post PR comment: %s", e)
 
 
 def _read_round_results(run_dir: str, round_num: int, jury: List[str]) -> Dict[str, Dict[str, Any]]:
