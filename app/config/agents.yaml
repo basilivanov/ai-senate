@@ -47,7 +47,7 @@ perspectives:
     role: "Critical Reviewer — edge cases, contradictions, hidden assumptions"
     provider: "opencode-go"
     model: "glm-5.1"
-    timeout_sec: 240
+    timeout_sec: 360
 
   kimi26:
     enabled: true

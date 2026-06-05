@@ -9,6 +9,7 @@ import yaml
 from app.runs import storage
 from app.council_core import consensus, findings, writer as writer_module
 from app.agent_adapters import OpencodeAgentAdapter
+from app.opencode import get_client
 from app.council_core.contracts import (
     AgentRequestContract, Workspace, Instructions,
     DocumentRef, ProjectContext, GitDiffContext, PRContext,
@@ -162,6 +163,14 @@ async def run_council_task(
 
     effective_max_rounds = max_rounds
     effective_auto_stop = auto_stop_if_clean
+
+    client = get_client()
+    try:
+        cleaned = await client.abort_all_sessions()
+        if cleaned:
+            log.info("Cleaned up %d stale opencode sessions before run %s", cleaned, run_id)
+    except Exception:
+        pass
 
     run_dir = os.path.join(RUNS_DIR, run_id)
     os.makedirs(run_dir, exist_ok=True)
