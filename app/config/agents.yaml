@@ -49,12 +49,12 @@ perspectives:
     model: "glm-5.1"
     timeout_sec: 240
 
-  qwen37max:
+  kimi26:
     enabled: true
     role: "Coder — реализуемость, алгоритмы, читаемость, тесты"
     provider: "opencode-go"
-    model: "qwen3.7-plus"
-    timeout_sec: 360
+    model: "kimi-k2.6"
+    timeout_sec: 300
 
   minimax:
     enabled: true
@@ -127,11 +127,11 @@ writer:
 juries:
   default:
     - glm51
-    - qwen37max
+    - kimi26
     - minimax
     - deepseekv4pro
   lite:
     - glm51
-    - qwen37max
+    - kimi26
   synthesis:
     - synthesizer

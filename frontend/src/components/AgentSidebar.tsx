@@ -15,7 +15,7 @@ const AGENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = 
   synthesizer: Brain,
   writer: Sparkles,
   glm51: Bug,
-  qwen37max: Code,
+  kimi26: Code,
   minimax: Shield,
   deepseekv4pro: Database,
 };

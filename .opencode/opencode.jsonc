@@ -21,9 +21,9 @@
       "model": "opencode-go/glm-5.1",
       "prompt": "{file:./agents/glm51.md}"
     },
-    "qwen37max": {
-      "model": "opencode-go/qwen3.7-plus",
-      "prompt": "{file:./agents/qwen37max.md}"
+    "kimi26": {
+      "model": "opencode-go/kimi-k2.6",
+      "prompt": "{file:./agents/kimi26.md}"
     },
     "minimax": {
       "model": "opencode-go/minimax-m3",
