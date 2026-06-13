@@ -87,3 +87,4 @@ See `app/web/api.py` for full list. Key endpoints:
 - `GET /api/runs/{id}/updated-spec` — generated spec text
 - `GET /api/runs/{id}/changes` — changes summary
 - `POST /api/runs/{id}/accept` — accept the spec as `data/spec.md`
+
