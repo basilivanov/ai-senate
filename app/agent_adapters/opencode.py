@@ -233,11 +233,46 @@ class OpencodeAgentAdapter:
         parts.append(f"Owner input priority: {instructions.get('owner_input_priority', 'high')}")
         parts.append(f"Focus areas: {focus_str}")
         parts.append(f"Schema: {contract.get('output_schema', 'agent_review_response_v1')}")
-        parts.append(f"- Return ONLY a valid JSON object matching agent_review_response_v1.")
-        parts.append(f"- Do NOT include any prose before or after the JSON.")
-        parts.append(f"- If you must wrap JSON in a code block, use ```json fences.")
 
-        parts.append(f"""
+        mode = contract.get("mode", "review")
+        if mode == "discussion":
+            parts.append(f"- Return ONLY a valid JSON object matching agent_review_response_v1.")
+            parts.append(f"- Do NOT include any prose before or after the JSON.")
+            parts.append(f"- If you must wrap JSON in a code block, use ```json fences.")
+            parts.append(f"- Interpret types for discussion: info=insight, suggestion=proposal, risk=concern, major_risk=serious concern, blocker=fundamental obstacle, question=open question.")
+            parts.append(f"- Interpret decisions for discussion: accept=agree, accept_with_changes=mostly agree with caveats, needs_more_info=need more info, reject=disagree, block=fundamental disagreement.")
+
+            parts.append(f"""
+Required JSON shape:
+{{
+  "schema_version": "agent_review_response_v1",
+  "agent": "<your agent key>",
+  "role": "Участник обсуждения",
+  "decision": "accept | accept_with_changes | needs_more_info | reject | block",
+  "confidence": 0.0,
+  "summary": "...",
+  "items": [
+    {{
+      "id": "<agent>-point-001",
+      "type": "info | suggestion | risk | major_risk | blocker | question",
+      "category": "...",
+      "severity": "low | medium | high",
+      "title": "...",
+      "description": "...",
+      "evidence": "...",
+      "recommendation": "...",
+      "confidence": 0.0
+    }}
+  ],
+  "open_questions": ["..."],
+  "required_actions": ["..."]
+}}""")
+        else:
+            parts.append(f"- Return ONLY a valid JSON object matching agent_review_response_v1.")
+            parts.append(f"- Do NOT include any prose before or after the JSON.")
+            parts.append(f"- If you must wrap JSON in a code block, use ```json fences.")
+
+            parts.append(f"""
 Required JSON shape:
 {{
   "schema_version": "agent_review_response_v1",

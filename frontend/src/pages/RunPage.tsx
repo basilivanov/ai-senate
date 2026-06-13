@@ -69,6 +69,8 @@ export function RunPage() {
   const totalFindings =
     (f?.blockers.length || 0) + (f?.major_risks.length || 0) + (f?.risks.length || 0) + (f?.suggestions.length || 0) + (f?.questions.length || 0) + (f?.infos.length || 0);
 
+  const isDiscussion = (d as RunDetail).mode === "discussion";
+
   return (
     <div className="flex h-[calc(100vh-3rem)]">
       {/* Left sidebar: agents */}
@@ -78,6 +80,7 @@ export function RunPage() {
         currentRound={d.current_round}
         maxRounds={d.max_rounds}
         profile={d.profile}
+        mode={(d as RunDetail).mode}
       />
 
       {/* Right: main content */}
@@ -92,7 +95,7 @@ export function RunPage() {
               <span className="font-mono">{d.run_id}</span>
               {d.profile && <><span>·</span><Badge variant="outline" className="text-[10px]">{d.profile}</Badge></>}
             </div>
-            <h1 className="text-2xl font-semibold mt-1">{d.new_document ? "Новый документ" : "Ревью ТЗ"}</h1>
+            <h1 className="text-2xl font-semibold mt-1">{d.mode === "discussion" ? "Обсуждение" : d.new_document ? "Новый документ" : "Ревью ТЗ"}</h1>
             <div className="text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>Phase: <span className="text-foreground font-medium">{phaseLabel(d.phase)}</span></span>
               <span>·</span>
@@ -140,9 +143,15 @@ export function RunPage() {
 
         <Tabs defaultValue={hasMultiDoc ? "docs" : "findings"}>
           <TabsList>
-            <TabsTrigger active={activeTab === "findings"} onClick={() => setActiveTab("findings")}>Findings ({totalFindings})</TabsTrigger>
+            <TabsTrigger active={activeTab === "findings"} onClick={() => setActiveTab("findings")}>
+              {isDiscussion ? "Позиции" : "Findings"} ({totalFindings})
+            </TabsTrigger>
             <TabsTrigger active={activeTab === "consensus"} onClick={() => setActiveTab("consensus")}>Consensus</TabsTrigger>
-            {hasMultiDoc ? <TabsTrigger active={activeTab === "docs"} onClick={() => setActiveTab("docs")}>Documents</TabsTrigger> : <TabsTrigger active={activeTab === "spec"} onClick={() => setActiveTab("spec")}>Spec</TabsTrigger>}
+            {hasMultiDoc ? <TabsTrigger active={activeTab === "docs"} onClick={() => setActiveTab("docs")}>Documents</TabsTrigger> : (
+              <TabsTrigger active={activeTab === "spec"} onClick={() => setActiveTab("spec")}>
+                {isDiscussion ? "Синтез" : "Spec"}
+              </TabsTrigger>
+            )}
             <TabsTrigger active={activeTab === "changes"} onClick={() => setActiveTab("changes")}>Changes</TabsTrigger>
             <TabsTrigger active={activeTab === "log"} onClick={() => setActiveTab("log")}>Log</TabsTrigger>
           </TabsList>
@@ -151,7 +160,7 @@ export function RunPage() {
             {activeTab === "findings" && (findings.isLoading ? (
               <Skeleton className="h-64" />
             ) : f ? (
-              <FindingsPanel findings={f} />
+              <FindingsPanel findings={f} isDiscussion={isDiscussion} />
             ) : null)}
           </TabsContent>
 
@@ -174,9 +183,9 @@ export function RunPage() {
               spec.isLoading ? (
                 <Skeleton className="h-96" />
               ) : spec.data?.content ? (
-                <UpdatedSpecPanel content={spec.data.content} />
+                <UpdatedSpecPanel content={spec.data.content} title={isDiscussion ? "Синтез обсуждения" : "Updated specification"} />
               ) : (
-                <EmptyState text="Writer не сгенерировал обновлённую спецификацию" />
+                <EmptyState text={isDiscussion ? "Синтез не сгенерирован" : "Writer не сгенерировал обновлённую спецификацию"} />
               )
             ))}
           </TabsContent>
@@ -230,14 +239,14 @@ function ConsensusCard({ consensus, totalFindings }: { consensus: import("@/lib/
   );
 }
 
-function FindingsPanel({ findings }: { findings: import("@/lib/types").FindingsByCategory }) {
-  const groups: { key: keyof import("@/lib/types").FindingsByCategory; title: string; icon: React.ReactNode }[] = [
-    { key: "blockers", title: "Blockers", icon: <AlertCircle className="h-4 w-4 text-rose-500" /> },
-    { key: "major_risks", title: "Major Risks", icon: <AlertTriangle className="h-4 w-4 text-amber-500" /> },
-    { key: "risks", title: "Risks", icon: <AlertTriangle className="h-4 w-4 text-orange-500" /> },
-    { key: "suggestions", title: "Suggestions", icon: <Sparkles className="h-4 w-4 text-sky-500" /> },
-    { key: "questions", title: "Questions", icon: <Info className="h-4 w-4 text-violet-500" /> },
-    { key: "infos", title: "Info", icon: <Info className="h-4 w-4 text-slate-500" /> },
+function FindingsPanel({ findings, isDiscussion = false }: { findings: import("@/lib/types").FindingsByCategory; isDiscussion?: boolean }) {
+  const groups: { key: keyof import("@/lib/types").FindingsByCategory; title: string; titleDiscussion: string; icon: React.ReactNode }[] = [
+    { key: "blockers", title: "Blockers", titleDiscussion: "Фундаментальные препятствия", icon: <AlertCircle className="h-4 w-4 text-rose-500" /> },
+    { key: "major_risks", title: "Major Risks", titleDiscussion: "Серьёзные сомнения", icon: <AlertTriangle className="h-4 w-4 text-amber-500" /> },
+    { key: "risks", title: "Risks", titleDiscussion: "Опасения", icon: <AlertTriangle className="h-4 w-4 text-orange-500" /> },
+    { key: "suggestions", title: "Suggestions", titleDiscussion: "Предложения", icon: <Sparkles className="h-4 w-4 text-sky-500" /> },
+    { key: "questions", title: "Questions", titleDiscussion: "Открытые вопросы", icon: <Info className="h-4 w-4 text-violet-500" /> },
+    { key: "infos", title: "Info", titleDiscussion: "Инсайты и аргументы", icon: <Info className="h-4 w-4 text-slate-500" /> },
   ];
   return (
     <div className="space-y-6">
@@ -248,7 +257,7 @@ function FindingsPanel({ findings }: { findings: import("@/lib/types").FindingsB
           <section key={g.key}>
             <div className="flex items-center gap-2 mb-3">
               {g.icon}
-              <h3 className="font-semibold">{g.title}</h3>
+              <h3 className="font-semibold">{isDiscussion ? g.titleDiscussion : g.title}</h3>
               <Badge variant="outline">{items.length}</Badge>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
@@ -335,7 +344,7 @@ function ConsensusDetail({ consensus }: { consensus: import("@/lib/types").Conse
   );
 }
 
-function UpdatedSpecPanel({ content }: { content: string }) {
+function UpdatedSpecPanel({ content, title = "Updated specification" }: { content: string; title?: string }) {
   const download = () => {
     const blob = new Blob([content], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -346,7 +355,7 @@ function UpdatedSpecPanel({ content }: { content: string }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-sm">Updated specification</CardTitle>
+        <CardTitle className="text-sm">{title}</CardTitle>
         <Button size="sm" variant="outline" onClick={download}>
           <Download className="h-3.5 w-3.5" /> Скачать
         </Button>

@@ -50,12 +50,40 @@ async def run_writer(
     agent_outputs_dir: str,
     output_file: str,
     documents: Optional[List] = None,
+    mode: str = "review",
 ) -> WriterResponseContract:
     """
     Executes the writer/synthesizer agent to generate the updated specification.
+    In discussion mode, produces a synthesis/summary of the discussion.
     """
     cfg = _load_writer_config()
     is_multi_doc = documents and len(documents) > 1
+
+    # Override system prompt and task for discussion mode
+    if mode == "discussion":
+        cfg["system_override"] = (
+            "You are the synthesizer for the AI Senate Council discussion.\n"
+            "Your job: produce a comprehensive synthesis document that captures the key points, "
+            "areas of agreement and disagreement, open questions, and final conclusions from the discussion.\n"
+            "\n"
+            "ABSOLUTE OUTPUT RULES:\n"
+            "1. Respond with a single valid JSON object, NOTHING else — no prose, no markdown fences, no commentary.\n"
+            "2. The JSON must match writer_response_v1 with the field `updated_document_content` containing the full synthesis as a Markdown string.\n"
+            "3. Do NOT write to any files. Do NOT reference any tool outputs. The full document must be in the `updated_document_content` string.\n"
+            "4. Escape all newlines as `\\n` and quotes as `\\\"` inside the JSON string.\n"
+            "5. Structure the synthesis with clear sections: Summary, Key Points, Areas of Agreement, Areas of Disagreement, Open Questions, Conclusions & Recommendations.\n"
+        )
+        writer_task = (
+            "Create a synthesis document summarizing the discussion. "
+            "Include: key points raised, areas of agreement, areas of disagreement, "
+            "open questions, and final conclusions with recommendations. "
+            "Return the new document content in JSON under the 'updated_document_content' field."
+        )
+    else:
+        writer_task = (
+            "Create updated specification without hiding blockers, major risks or unresolved questions. "
+            "Return the new document content in JSON under the 'updated_document_content' field."
+        )
 
     if is_multi_doc:
         doc_list = ", ".join(d.get("filename", "doc") for d in documents)
@@ -77,10 +105,7 @@ async def run_writer(
             consensus_file=consensus_file,
             agent_outputs_dir=agent_outputs_dir,
         ),
-        task=(
-            "Create updated specification without hiding blockers, major risks or unresolved questions. "
-            "Return the new document content in JSON under the 'updated_document_content' field."
-        ),
+        task=writer_task,
         output_file=output_file,
     )
     request_json = request.model_dump_json(indent=2)
@@ -117,7 +142,7 @@ async def run_writer(
         return WriterResponseContract(
             schema_version="writer_response_v1",
             status="failed",
-            summary=f"Ошибка генерации ТЗ: {error_msg}",
+            summary=f"Ошибка генерации документа: {error_msg}",
             updated_document_content=fallback_content or f"# Ошибка генерации\n\nНе удалось запустить Writer: {error_msg}",
             output_file=output_file,
             owner_input_processed=False,
@@ -146,7 +171,7 @@ async def run_writer(
         return WriterResponseContract(
             schema_version="writer_response_v1",
             status=parsed_output.get("status", "draft_created"),
-            summary=parsed_output.get("summary", "ТЗ успешно обновлено (мультидокумент)."),
+            summary=parsed_output.get("summary", "Документ успешно сгенерирован (мультидокумент)."),
             updated_document_content=primary_content,
             output_file=output_file,
             owner_input_processed=parsed_output.get("owner_input_processed", True),
@@ -167,7 +192,7 @@ async def run_writer(
     return WriterResponseContract(
         schema_version="writer_response_v1",
         status=parsed_output.get("status", "draft_created"),
-        summary=parsed_output.get("summary", "ТЗ успешно обновлено."),
+        summary=parsed_output.get("summary", "Документ успешно сгенерирован."),
         updated_document_content=updated_content,
         output_file=output_file,
         owner_input_processed=parsed_output.get("owner_input_processed", True),

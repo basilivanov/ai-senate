@@ -67,6 +67,7 @@ class AgentRequestContract(BaseModel):
     workspace: Workspace
     instructions: Instructions
     output_schema: str = "agent_review_response_v1"
+    mode: str = "review"  # "review" | "discussion"
 
 class FindingItem(BaseModel):
     id: str

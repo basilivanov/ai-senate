@@ -21,6 +21,7 @@ const PROFILE_INFO: Record<string, { label: string; desc: string }> = {
   full_council: { label: "Полный Совет", desc: "4 модели, 2 раунда, writer" },
   quick_review: { label: "Быстрое ревью", desc: "2 модели, 1 раунд, без writer" },
   code_review: { label: "Code Review", desc: "4 модели + проект + git diff" },
+  discussion: { label: "Обсуждение", desc: "4 модели без ролей, свободное обсуждение" },
 };
 
 export function HomePage() {
@@ -66,6 +67,7 @@ export function HomePage() {
 
   const isCodeReview = profile === "code_review";
   const isQuickReview = profile === "quick_review";
+  const isDiscussion = profile === "discussion";
 
   const create = useMutation({
     mutationFn: () => {
@@ -128,7 +130,7 @@ export function HomePage() {
   const pastRuns = (runs.data || []).filter((r) => !activeRuns.includes(r));
 
   const profiles = config.data?.profiles || {};
-  const juryInfo = isQuickReview ? "lite" : "default";
+  const juryInfo = isQuickReview ? "lite" : isDiscussion ? "discussion" : "default";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
@@ -191,7 +193,19 @@ export function HomePage() {
                   </div>
 
                   {/* Multi-doc or single-doc */}
-                  {isQuickReview ? (
+                  {isDiscussion ? (
+                    <>
+                      <label className="block">
+                        <div className="text-sm font-medium mb-1.5">Тема для обсуждения / Вопрос</div>
+                        <Textarea
+                          value={spec}
+                          onChange={(e) => setSpec(e.target.value)}
+                          placeholder="Введите тему или вопрос для обсуждения"
+                          className="min-h-[120px] font-mono text-xs"
+                        />
+                      </label>
+                    </>
+                  ) : isQuickReview ? (
                     <>
                       <label className="block">
                         <div className="text-sm font-medium mb-1.5">Текст ревью (spec)</div>
@@ -249,17 +263,19 @@ export function HomePage() {
                   )}
 
                   <label className="block">
-                    <div className="text-sm font-medium mb-1.5">Owner Input — что изменить / добавить</div>
+                    <div className="text-sm font-medium mb-1.5">
+                      {isDiscussion ? "Дополнительный контекст / Уточнения" : "Owner Input — что изменить / добавить"}
+                    </div>
                     <Textarea
                       value={ownerInput}
                       onChange={(e) => setOwnerInput(e.target.value)}
-                      placeholder="Опишите правки, уточнения, новые требования"
+                      placeholder={isDiscussion ? "Дополнительная информация, контекст, уточнения к вопросу" : "Опишите правки, уточнения, новые требования"}
                       className="min-h-[80px]"
                     />
                   </label>
 
-                  {/* Project & Git diff (code_review profile) */}
-                  {(isCodeReview || includeProject) && (
+                  {/* Project & Git diff (code_review profile only, not discussion) */}
+                  {!isDiscussion && (isCodeReview || includeProject) && (
                     <div className="space-y-3 border rounded-lg p-3 bg-muted/30">
                       <div className="text-sm font-medium flex items-center gap-1.5">
                         <FolderOpen className="h-3.5 w-3.5" /> Контекст проекта
@@ -319,7 +335,8 @@ export function HomePage() {
                     </div>
                   )}
 
-                  {/* GitHub PR */}
+                  {/* GitHub PR — hidden for discussion mode */}
+                  {!isDiscussion && (
                   <div className="space-y-2">
                     <label className="flex items-center gap-2 text-sm font-medium">
                       <GitBranch className="h-4 w-4" />
@@ -358,12 +375,15 @@ export function HomePage() {
                       Автоматически запостить комментарий в PR после ревью
                     </label>
                   </div>
+                  )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" checked={newDoc} onChange={(e) => setNewDoc(e.target.checked)} className="h-4 w-4 rounded border-input" />
-                      <span>Новый документ</span>
-                    </label>
+                    {!isDiscussion && (
+                      <label className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={newDoc} onChange={(e) => setNewDoc(e.target.checked)} className="h-4 w-4 rounded border-input" />
+                        <span>Новый документ</span>
+                      </label>
+                    )}
                     <label className="flex items-center gap-2 text-sm">
                       <span>Раундов:</span>
                       <Input

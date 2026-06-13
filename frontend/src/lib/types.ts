@@ -67,6 +67,7 @@ export interface RunDetail {
   agents: Record<string, AgentRunState>;
   round_log: RoundEntry[];
   profile?: string;
+  mode?: string;  // "review" | "discussion"
   project?: { path: string; files_included: number; truncated: boolean } | null;
   git_diff?: { diff_type: string; files_changed: number } | null;
 }
@@ -170,6 +171,7 @@ export interface ProfileConfig {
   writer: boolean;
   auto_stop_if_clean: boolean;
   project_context: boolean;
+  mode?: string;  // "review" | "discussion"
 }
 
 export interface PerspectivesConfig {

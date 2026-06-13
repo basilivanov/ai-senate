@@ -15,6 +15,15 @@ from app.council_core.contracts import (
     DocumentRef, ProjectContext, GitDiffContext, PRContext,
 )
 
+import logging
+log = logging.getLogger("ai_senate.service")
+
+# Discussion mode system prompt path
+DISCUSSION_PROMPT_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "..", ".opencode", "agents", "discuss_participant.md",
+)
+
 
 PROJECT_ROOT = os.environ.get("AI_SENATE_ROOT", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 DATA_DIR = os.environ.get("AI_SENATE_DATA_DIR", os.path.join(PROJECT_ROOT, "data"))
@@ -86,12 +95,15 @@ async def _invoke_perspective(
     contract_json: str,
     run_data: dict,
     lock: asyncio.Lock,
+    system_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     async with lock:
         run_data["agents"][perspective_key]["status"] = "running"
         update_run_file(run_id, run_data)
 
     adapter_cfg = _build_adapter_config(perspective_cfg, _load_agent_config().get("defaults", {}))
+    if system_override:
+        adapter_cfg["system_override"] = system_override
     adapter = OpencodeAgentAdapter(perspective_key, adapter_cfg)
     result = await adapter.run(contract_json)
     result["role"] = perspective_cfg.get("role", "reviewer")
@@ -137,7 +149,24 @@ def _get_profile(yaml_cfg: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
         "writer": True,
         "auto_stop_if_clean": True,
         "project_context": False,
+        "mode": "review",
     }
+
+
+def _load_discussion_prompt() -> Optional[str]:
+    """Load the discussion participant system prompt."""
+    try:
+        with open(DISCUSSION_PROMPT_PATH, "r", encoding="utf-8") as f:
+            content = f.read()
+            # Strip YAML front matter if present
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    return parts[2].strip()
+            return content
+    except Exception as e:
+        log.warning("Failed to load discussion prompt from %s: %s", DISCUSSION_PROMPT_PATH, e)
+        return None
 
 
 async def run_council_task(
@@ -160,6 +189,12 @@ async def run_council_task(
     jury_name = profile_cfg.get("jury", "default")
     jury = _get_jury(yaml_cfg, jury_name)
     writer_enabled = profile_cfg.get("writer", True)
+    run_mode = profile_cfg.get("mode", "review")  # "review" or "discussion"
+
+    # Load discussion system override if needed
+    discussion_system_override = None
+    if run_mode == "discussion":
+        discussion_system_override = _load_discussion_prompt()
 
     effective_max_rounds = max_rounds
     effective_auto_stop = auto_stop_if_clean
@@ -235,6 +270,7 @@ async def run_council_task(
         "round_log": [],
         "agents": {name: {"status": "queued", "duration_ms": 0, "error": None} for name in jury},
         "profile": profile,
+        "mode": run_mode,
         "project": {
             "path": project_context.get("path") if project_context else None,
             "files_included": len(project_context.get("files", [])) if project_context else 0,
@@ -273,23 +309,41 @@ async def run_council_task(
             root=PROJECT_ROOT, spec_file=spec_file, owner_input_file=owner_file,
             **workspace_kwargs,
         )
+        # Mode-specific task, role, and focus
+        if run_mode == "discussion":
+            agent_role = "Участник обсуждения"
+            agent_task = (
+                "Round 1: Обсуди предложенный вопрос/тему независимо.\n"
+                "Проанализируй суть вопроса, выдели ключевые аргументы за и против, "
+                "сформулируй свою позицию, укажи неоднозначности и открытые вопросы.\n"
+                "Return a valid JSON object with schema agent_review_response_v1."
+            )
+            agent_focus = ["суть вопроса", "аргументы за", "аргументы против",
+                           "альтернативы", "практические выводы", "неоднозначности"]
+        else:
+            agent_role = perspective.get("role", "reviewer")
+            agent_task = "Round 1: Review the specification independently. Return structured findings."
+            agent_focus = ["requirements clarity", "MVP scope", "architecture",
+                           "missing contracts", "risks", "blockers", "test strategy",
+                           "implementation complexity"]
+
         contract = AgentRequestContract(
             run_id=run_id,
             agent=name,
-            role=perspective.get("role", "reviewer"),
-            task="Round 1: Review the specification independently. Return structured findings.",
+            role=agent_role,
+            task=agent_task,
             new_document=new_document,
             workspace=workspace,
-            instructions=Instructions(focus=["requirements clarity", "MVP scope", "architecture",
-                                            "missing contracts", "risks", "blockers", "test strategy",
-                                            "implementation complexity"]),
+            instructions=Instructions(focus=agent_focus),
+            mode=run_mode,
         )
         contract_json = contract.model_dump_json(indent=2)
         agent_dir = os.path.join(run_dir, "round-1", "agents", name)
         os.makedirs(agent_dir, exist_ok=True)
         with open(os.path.join(agent_dir, "prompt.md"), "w", encoding="utf-8") as f:
             f.write(contract_json)
-        tasks.append(_invoke_perspective(run_id, 1, name, perspective, contract_json, run_data, lock))
+        tasks.append(_invoke_perspective(run_id, 1, name, perspective, contract_json, run_data, lock,
+                                         system_override=discussion_system_override))
 
     await asyncio.gather(*tasks)
 
@@ -347,14 +401,28 @@ async def run_council_task(
         tasks = []
         for name in jury:
             perspective = _get_perspective(yaml_cfg, name)
-            task_desc = (
-                "You are in Round 2: Cross-review.\n"
-                "Review the findings and consensus of the first round.\n"
-                "Confirm blockers/major risks you agree with, dispute or downgrade findings "
-                "you consider exaggerated, and add any new important items missed in Round 1.\n"
-                "Return a valid JSON object with the same shape as Round 1 "
-                "(schema agent_review_response_v1)."
-            )
+            if run_mode == "discussion":
+                task_desc = (
+                    "You are in Round 2: Cross-review discussion.\n"
+                    "Review the positions and arguments of the first round.\n"
+                    "Confirm points you agree with, dispute or add nuance to arguments "
+                    "you consider incomplete or wrong, and add any new important points missed in Round 1.\n"
+                    "Return a valid JSON object with the same shape as Round 1 "
+                    "(schema agent_review_response_v1)."
+                )
+                agent_role = "Участник обсуждения"
+                agent_focus = ["cross-review", "согласие/несогласие", "уточнение"]
+            else:
+                task_desc = (
+                    "You are in Round 2: Cross-review.\n"
+                    "Review the findings and consensus of the first round.\n"
+                    "Confirm blockers/major risks you agree with, dispute or downgrade findings "
+                    "you consider exaggerated, and add any new important items missed in Round 1.\n"
+                    "Return a valid JSON object with the same shape as Round 1 "
+                    "(schema agent_review_response_v1)."
+                )
+                agent_role = perspective.get("role", "reviewer")
+                agent_focus = ["cross-review"]
             workspace = Workspace(
                 root=PROJECT_ROOT, spec_file=spec_file, owner_input_file=owner_file,
                 **workspace_kwargs,
@@ -362,18 +430,20 @@ async def run_council_task(
             contract = AgentRequestContract(
                 run_id=run_id,
                 agent=name,
-                role=perspective.get("role", "reviewer"),
+                role=agent_role,
                 task=task_desc,
                 new_document=new_document,
                 workspace=workspace,
-                instructions=Instructions(focus=["cross-review"]),
+                instructions=Instructions(focus=agent_focus),
+                mode=run_mode,
             )
             contract_json = contract.model_dump_json(indent=2)
             agent_dir = os.path.join(run_dir, "round-2", "agents", name)
             os.makedirs(agent_dir, exist_ok=True)
             with open(os.path.join(agent_dir, "prompt.md"), "w", encoding="utf-8") as f:
                 f.write(contract_json)
-            tasks.append(_invoke_perspective(run_id, 2, name, perspective, contract_json, run_data, lock))
+            tasks.append(_invoke_perspective(run_id, 2, name, perspective, contract_json, run_data, lock,
+                                             system_override=discussion_system_override))
 
         await asyncio.gather(*tasks)
 
@@ -429,6 +499,7 @@ async def run_council_task(
                 agent_outputs_dir=os.path.join(run_dir, "agents"),
                 output_file=updated_spec_file,
                 documents=doc_refs if is_multi_doc else None,
+                mode=run_mode,
             )
             _build_changes_summary(run_dir, writer_res, consensus_res)
 
@@ -465,27 +536,41 @@ async def run_council_task(
                 root=PROJECT_ROOT, spec_file=updated_spec_path, owner_input_file=owner_file,
                 **workspace_kwargs,
             )
-            contract = AgentRequestContract(
-                run_id=run_id,
-                agent=name,
-                role=perspective.get("role", "reviewer"),
-                task=(
+            if run_mode == "discussion":
+                r3_task = (
+                    "You are in Round 3: Final Synthesis Check.\n"
+                    "Inspect the generated synthesis document.\n"
+                    "Return a JSON object with these fields: "
+                    "passed (bool), lost_owner_input (list), lost_blockers (list), "
+                    "lost_major_risks (list), new_issues (list), summary (string)."
+                )
+                r3_role = "Участник обсуждения"
+            else:
+                r3_task = (
                     "You are in Round 3: Final Writer Check.\n"
                     "Inspect the generated updated-spec.md.\n"
                     "Return a JSON object with these fields: "
                     "passed (bool), lost_owner_input (list), lost_blockers (list), "
                     "lost_major_risks (list), new_issues (list), summary (string)."
-                ),
+                )
+                r3_role = perspective.get("role", "reviewer")
+            contract = AgentRequestContract(
+                run_id=run_id,
+                agent=name,
+                role=r3_role,
+                task=r3_task,
                 new_document=new_document,
                 workspace=workspace,
                 instructions=Instructions(focus=["final-check"]),
+                mode=run_mode,
             )
             contract_json = contract.model_dump_json(indent=2)
             agent_dir = os.path.join(run_dir, "round-3", "agents", name)
             os.makedirs(agent_dir, exist_ok=True)
             with open(os.path.join(agent_dir, "prompt.md"), "w", encoding="utf-8") as f:
                 f.write(contract_json)
-            tasks.append(_invoke_perspective(run_id, 3, name, perspective, contract_json, run_data, lock))
+            tasks.append(_invoke_perspective(run_id, 3, name, perspective, contract_json, run_data, lock,
+                                             system_override=discussion_system_override))
 
         await asyncio.gather(*tasks)
         all_passed, failed_checks, r3_agent_runs = _read_round3_results(run_dir, jury)

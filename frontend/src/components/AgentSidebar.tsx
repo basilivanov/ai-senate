@@ -3,7 +3,7 @@ import type { AgentRunState, AgentRunStatus } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { formatDuration } from "@/lib/utils";
 import {
-  Bug, Code, Database, Shield, Sparkles, Brain, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle, Terminal,
+  Bug, Code, Database, Shield, Sparkles, Brain, Loader2, CheckCircle2, XCircle, Clock, AlertTriangle, Terminal, MessageCircle,
 } from "lucide-react";
 
 const AGENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -18,6 +18,8 @@ const AGENT_ICON: Record<string, React.ComponentType<{ className?: string }>> = 
   kimi26: Code,
   minimax: Shield,
   deepseekv4pro: Database,
+  // Discussion mode — all agents use MessageCircle icon
+  discuss_participant: MessageCircle,
 };
 
 const STATUS_CONFIG: Record<string, { icon: React.ComponentType<{ className?: string }>; text: string; color: string; animate: boolean }> = {
@@ -52,10 +54,11 @@ interface AgentSidebarCardProps {
   agentKey: string;
   state: AgentRunState;
   isWriter?: boolean;
+  isDiscussion?: boolean;
 }
 
-export function AgentSidebarCard({ agentKey, state, isWriter }: AgentSidebarCardProps) {
-  const Icon = AGENT_ICON[agentKey] || Terminal;
+export function AgentSidebarCard({ agentKey, state, isWriter, isDiscussion }: AgentSidebarCardProps) {
+  const Icon = isDiscussion && !isWriter ? MessageCircle : (AGENT_ICON[agentKey] || Terminal);
   const statusCfg = STATUS_CONFIG[state.status] || STATUS_CONFIG.queued;
   const StatusIcon = statusCfg.icon;
   const parsed = state.parsed_output;
@@ -74,7 +77,7 @@ export function AgentSidebarCard({ agentKey, state, isWriter }: AgentSidebarCard
             )}
           </div>
           <div className="min-w-0">
-            <div className="text-sm font-medium truncate">{isWriter ? "Writer" : agentKey}</div>
+            <div className="text-sm font-medium truncate">{isWriter ? "Writer" : isDiscussion ? `Участник: ${agentKey}` : agentKey}</div>
             <div className="text-[10px] text-muted-foreground">
               {state.status === "running" ? <>{statusCfg.text}<Dots /></> : statusCfg.text}
             </div>
@@ -109,9 +112,12 @@ interface AgentSidebarProps {
   currentRound: number;
   maxRounds: number;
   profile?: string;
+  mode?: string;
 }
 
-export function AgentSidebar({ agents, phase, currentRound, maxRounds, profile }: AgentSidebarProps) {
+export function AgentSidebar({ agents, phase, currentRound, maxRounds, profile, mode }: AgentSidebarProps) {
+  const isDiscussion = mode === "discussion";
+
   const perspectiveEntries = useMemo(() => {
     return Object.entries(agents)
       .filter(([key]) => key !== "writer")
@@ -126,7 +132,7 @@ export function AgentSidebar({ agents, phase, currentRound, maxRounds, profile }
   return (
     <aside className="w-[240px] min-w-[240px] lg:w-[320px] lg:min-w-[320px] border-r bg-muted/20 flex flex-col h-full overflow-y-auto">
       <div className="p-3 border-b">
-        <h3 className="text-sm font-semibold">Агенты</h3>
+        <h3 className="text-sm font-semibold">{isDiscussion ? "Участники обсуждения" : "Агенты"}</h3>
         {profile && (
           <div className="text-[10px] text-muted-foreground mt-0.5">Профиль: {profile}</div>
         )}
@@ -134,7 +140,7 @@ export function AgentSidebar({ agents, phase, currentRound, maxRounds, profile }
 
       <div className="p-2 space-y-2 flex-1">
         {perspectiveEntries.map(({ key, state }) => (
-          <AgentSidebarCard key={key} agentKey={key} state={state} />
+          <AgentSidebarCard key={key} agentKey={key} state={state} isDiscussion={isDiscussion} />
         ))}
         {writerEntry && (
           <>

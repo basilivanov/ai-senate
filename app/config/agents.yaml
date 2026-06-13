@@ -36,6 +36,15 @@ profiles:
     auto_stop_if_clean: true
     project_context: true
 
+  discussion:
+    description: "Свободное обсуждение — модели обсуждают общий вопрос без ролей"
+    jury: discussion
+    max_rounds: 2
+    writer: true
+    auto_stop_if_clean: true
+    project_context: false
+    mode: discussion
+
 # Perspectives: each one = one reviewer with a focused role + one opencode model.
 # The "key" also maps to .opencode/agents/<key>.md (system prompt) and to the
 # .md file in .opencode/agents/ loaded by OpencodeAgentAdapter.
@@ -140,5 +149,10 @@ juries:
   lite:
     - minimax27
     - kimi26
+  discussion:
+    - minimax27
+    - kimi26
+    - minimax
+    - deepseekv4pro
   synthesis:
     - synthesizer
